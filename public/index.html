@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#171a19">
+  <meta name="description" content="Gestão interna para assistência técnica e loja de celulares">
+  <title>Nexo Mobile — Gestão</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><span></span></div>
+        <div><strong>NEXO</strong><small>mobile gestão</small></div>
+      </div>
+      <nav class="main-nav" aria-label="Navegação principal">
+        <button class="nav-item active" data-view="dashboard"><span class="nav-icon">⌂</span><span>Visão geral</span></button>
+        <p class="nav-label">OPERAÇÃO</p>
+        <button class="nav-item" data-view="orders"><span class="nav-icon">▤</span><span>Ordens de serviço</span><em id="nav-orders-count">0</em></button>
+        <button class="nav-item" data-view="products"><span class="nav-icon">◇</span><span>Produtos & estoque</span></button>
+        <button class="nav-item" data-view="services"><span class="nav-icon">⌁</span><span>Catálogo de serviços</span></button>
+        <p class="nav-label">FINANCEIRO</p>
+        <button class="nav-item" data-view="payables"><span class="nav-icon">▱</span><span>Contas a pagar</span></button>
+        <button class="nav-item" data-view="reports"><span class="nav-icon">↗</span><span>Relatórios</span><span class="soon">EM BREVE</span></button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="storage-note"><span class="pulse"></span><div><strong>Modo local</strong><small>Dados salvos neste navegador</small></div></div>
+        <button class="user-card" data-action="profile"><span class="avatar">MA</span><span><strong>Marcos Almeida</strong><small>Administrador</small></span><span>•••</span></button>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <button class="icon-button menu-button" id="menu-button" aria-label="Abrir menu">☰</button>
+        <div class="breadcrumb"><span>Nexo Mobile</span><b>/</b><strong id="current-view-label">Visão geral</strong></div>
+        <div class="top-actions">
+          <button class="search-button" id="global-search"><span>⌕</span><span>Buscar no sistema</span><kbd>Ctrl K</kbd></button>
+          <button class="icon-button notification-button" id="notifications-button" aria-label="Lembretes"><span>♢</span><i id="notification-dot"></i></button>
+          <button class="primary-button compact" data-action="new-order"><span>＋</span> Nova ordem</button>
+        </div>
+      </header>
+
+      <section class="content" id="app-content" aria-live="polite"></section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="modal-backdrop" hidden>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <header><div><p class="eyebrow" id="modal-eyebrow">NOVO REGISTRO</p><h2 id="modal-title">Cadastro</h2></div><button class="icon-button" data-action="close-modal" aria-label="Fechar">×</button></header>
+      <div class="modal-body" id="modal-body"></div>
+    </section>
+  </div>
+
+  <div class="command-backdrop" id="command-backdrop" hidden>
+    <section class="command-palette" role="dialog" aria-modal="true" aria-label="Busca global">
+      <div class="command-input"><span>⌕</span><input id="command-query" placeholder="Busque por cliente, IMEI, produto ou ordem..." autocomplete="off"><kbd>ESC</kbd></div>
+      <div id="command-results" class="command-results"></div>
+    </section>
+  </div>
+
+  <aside class="notification-drawer" id="notification-drawer" aria-hidden="true">
+    <header><div><p class="eyebrow">CENTRAL</p><h2>Lembretes</h2></div><button class="icon-button" data-action="close-notifications">×</button></header>
+    <div id="notification-list"></div>
+  </aside>
+
+  <div class="toast-region" id="toast-region" aria-live="polite"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
