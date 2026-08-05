@@ -1,4 +1,4 @@
-# Nexo Mobile — gestão de assistência e loja
+# Cellf — gestão de assistência e loja
 
 Primeira versão funcional de um sistema interno para uma empresa de conserto de celulares e venda de produtos. Nesta etapa os dados ficam no `localStorage` do navegador; a camada visual e os fluxos já foram separados por domínio para a próxima conexão com o Supabase.
 
