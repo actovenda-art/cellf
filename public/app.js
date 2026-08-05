@@ -1,4 +1,5 @@
-const STORAGE_KEY = 'nexo-mobile-state-v1';
+const STORAGE_KEY = 'cellf-state-v1';
+const LEGACY_STORAGE_KEY = 'nexo-mobile-state-v1';
 
 const seed = {
   products: [
@@ -41,7 +42,10 @@ const statusMap = {
 };
 
 function loadState() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || structuredClone(seed); }
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
+    return JSON.parse(saved) || structuredClone(seed);
+  }
   catch { return structuredClone(seed); }
 }
 function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); refreshBadges(); }
