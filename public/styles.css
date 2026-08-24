@@ -4,7 +4,7 @@
   --line: #e6e9e5;
   --canvas: #f4f5f2;
   --paper: #ffffff;
-  --accent: #dfff72;
+  --accent: #e0f967;
   --accent-deep: #a8cc2f;
   --green: #207a56;
   --green-soft: #e9f6ef;
@@ -24,14 +24,8 @@ button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 .app-shell { min-height: 100vh; display: grid; grid-template-columns: 248px minmax(0, 1fr); }
 .sidebar { position: fixed; z-index: 30; width: 248px; height: 100vh; background: var(--ink); color: #fff; padding: 26px 18px 18px; display: flex; flex-direction: column; }
-.brand { display: flex; gap: 12px; align-items: center; padding: 0 10px 32px; }
-.brand-mark { width: 35px; height: 35px; border: 2px solid var(--accent); border-radius: 12px 12px 12px 4px; position: relative; transform: rotate(-5deg); }
-.brand-mark::before, .brand-mark::after, .brand-mark span { content: ""; position: absolute; background: var(--accent); border-radius: 99px; }
-.brand-mark::before { width: 12px; height: 2px; left: 10px; top: 7px; }
-.brand-mark::after { width: 5px; height: 5px; left: 13px; bottom: 4px; }
-.brand-mark span { width: 17px; height: 2px; left: 7px; top: 15px; transform: rotate(90deg); }
-.brand strong { display: block; letter-spacing: .19em; font-size: 15px; }
-.brand small { color: #919891; font-size: 10px; letter-spacing: .08em; }
+.brand { overflow: hidden; margin: 0 0 28px; border-radius: 14px; background: var(--accent); }
+.brand-logo { display: block; width: 100%; height: auto; aspect-ratio: 16 / 5; object-fit: cover; object-position: center; }
 .main-nav { display: flex; flex-direction: column; gap: 4px; }
 .nav-label { margin: 23px 12px 9px; color: #686e6a; font-size: 9px; font-weight: 800; letter-spacing: .14em; }
 .nav-item { width: 100%; min-height: 43px; border: 0; color: #aeb3af; background: transparent; border-radius: 11px; display: flex; align-items: center; gap: 12px; padding: 0 12px; text-align: left; font-size: 13px; transition: .18s ease; }
@@ -46,7 +40,7 @@ button { cursor: pointer; }
 .storage-note strong, .storage-note small { display: block; }
 .storage-note strong { font-size: 11px; }
 .storage-note small { color: #777e78; margin-top: 2px; font-size: 9px; }
-.pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgba(223,255,114,.11); }
+.pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgba(224,249,103,.11); }
 .user-card { color: #fff; background: transparent; width: 100%; border: 0; border-top: 1px solid #2b2f2d; padding: 16px 7px 2px; display: flex; gap: 9px; align-items: center; text-align: left; }
 .user-card > span:nth-child(2) { flex: 1; }
 .user-card strong, .user-card small { display: block; }
@@ -173,7 +167,7 @@ kbd { font-family: inherit; font-size: 8px; border: 1px solid #dfe2de; backgroun
 .field input, .field select, .field textarea { width: 100%; border: 1px solid var(--line); border-radius: 10px; background: #fbfcfa; outline: 0; padding: 0 12px; font-size: 11px; color: var(--ink); }
 .field input, .field select { height: 42px; }
 .field textarea { min-height: 85px; padding-top: 11px; resize: vertical; }
-.field input:focus, .field select:focus, .field textarea:focus { border-color: #a8bd62; box-shadow: 0 0 0 3px rgba(223,255,114,.3); background: #fff; }
+.field input:focus, .field select:focus, .field textarea:focus { border-color: #a8bd62; box-shadow: 0 0 0 3px rgba(224,249,103,.3); background: #fff; }
 .field-help { color: var(--muted); font-size: 8px; margin-top: -2px; }
 .form-section { grid-column: 1 / -1; margin-top: 6px; padding-top: 18px; border-top: 1px solid var(--line); }
 .form-section h3 { margin: 0 0 14px; font-size: 11px; }
