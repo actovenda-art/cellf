@@ -821,8 +821,18 @@ select:not([multiple]):focus-visible { border-color: #a5ba64; box-shadow: 0 0 0 
 
 @supports (appearance: base-select) {
   select:not([multiple]), ::picker(select) { appearance: base-select; }
-  select:not([multiple]) { gap: 12px; padding-right: 12px; background-image: none; }
-  select:not([multiple])::picker-icon { color: #687268; transition: rotate .18s ease; }
+  select:not([multiple]) { align-items: center; justify-content: space-between; gap: 10px; padding-right: 12px; background-image: none; }
+  select:not([multiple])::picker-icon {
+    display: grid;
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    align-self: center;
+    place-items: center;
+    color: #687268;
+    line-height: 1;
+    transition: rotate .18s ease;
+  }
   select:not([multiple]):open::picker-icon { rotate: 180deg; }
 
   ::picker(select) {

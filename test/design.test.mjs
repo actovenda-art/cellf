@@ -210,9 +210,16 @@ test('menus suspensos possuem seta própria e opções personalizadas quando sup
 
   assert.ok(enhanced, 'A personalização avançada precisa oferecer melhoria progressiva.');
   assertProperty('select:not([multiple])', 'appearance', /^base-select$/iu, enhanced);
+  assertProperty('select:not([multiple])', 'align-items', /^center$/iu, enhanced);
+  assertProperty('select:not([multiple])', 'justify-content', /^space-between$/iu, enhanced);
   assertProperty('::picker(select)', 'appearance', /^base-select$/iu, enhanced);
   assertProperty('::picker(select)', 'border-radius', /\d+px/iu, enhanced);
   assertProperty('::picker(select)', 'box-shadow', /rgba\(/iu, enhanced);
+  assertProperty('select:not([multiple])::picker-icon', 'display', /^grid$/iu, enhanced);
+  assertProperty('select:not([multiple])::picker-icon', 'width', /^16px$/iu, enhanced);
+  assertProperty('select:not([multiple])::picker-icon', 'height', /^16px$/iu, enhanced);
+  assertProperty('select:not([multiple])::picker-icon', 'align-self', /^center$/iu, enhanced);
+  assertProperty('select:not([multiple])::picker-icon', 'place-items', /^center$/iu, enhanced);
   assertProperty('select:not([multiple]) option', 'min-height', /\d+px/iu, enhanced);
   assertProperty('select:not([multiple]) option:checked', 'background', /^#/iu, enhanced);
   assertProperty('select:not([multiple]) option::checkmark', 'color', /^#/iu, enhanced);
