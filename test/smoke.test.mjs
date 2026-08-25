@@ -63,7 +63,7 @@ test('a aplicação apresenta a marca Cellf e todos os módulos operacionais', a
   assert.match(html, /Cellf/i);
   assert.match(html, /cellf-logo\.png/);
 
-  for (const view of ['dashboard', 'orders', 'customers', 'products', 'services', 'sales', 'payables', 'reports', 'settings', 'agenda']) {
+  for (const view of ['dashboard', 'orders', 'deliveries', 'customers', 'products', 'services', 'sales', 'payables', 'reports', 'settings', 'agenda']) {
     assert.match(html, new RegExp(`data-view=["']${view}["']`), `O módulo ${view} precisa estar disponível na navegação.`);
   }
 });

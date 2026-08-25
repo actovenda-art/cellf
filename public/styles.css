@@ -724,7 +724,7 @@ kbd { font-size: 10px; color: #666e68; }
 .filter-group select, .toolbar select, .filter-bar select { min-height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: #4e5951; font-size: 11px; }
 .table-wrap, .table-scroll { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
 .data-table { min-width: 760px; border-spacing: 0; }
-.data-table[data-table="orders"], .data-table[data-table="payables"] { min-width: 1030px; }
+.data-table[data-table="orders"], .data-table[data-table="payables"], .data-table[data-table="deliveries"] { min-width: 1030px; }
 .data-table[data-table="customers"] { min-width: 890px; }
 .data-table[data-table="products"], .data-table[data-table="services"] { min-width: 820px; }
 .data-table th { padding: 13px 17px; background: #f8faf6; color: #58635b; font-size: 10px; font-weight: 750; letter-spacing: .075em; white-space: nowrap; }
@@ -925,6 +925,43 @@ select:not([multiple]):focus-visible { border-color: #a5ba64; box-shadow: 0 0 0 
 .customer-profile > div small { margin-top: 3px; color: var(--muted); font-size: 10px; }
 .customer-profile > .status { flex: 0 0 auto; }
 .customer-detail .detail-section > p { margin: 0; color: #566159; font-size: 12px; line-height: 1.6; }
+.address-form-heading { display: grid; gap: 4px; }
+.address-form-heading h3 { margin: 0; }
+.address-form-heading p { margin: 0; color: #66716a; font-size: 11px; line-height: 1.5; }
+.fulfillment-address-fields { gap: 15px; padding: 17px; border: 1px solid #e4eadb; border-radius: 15px; background: #fafbf7; }
+.fulfillment-address-fields[hidden] { display: none; }
+.fulfillment-address-fields .form-section { margin-top: 0; }
+.fulfillment-address-fields .form-grid { gap: 14px; }
+.customer-address-section { display: grid; gap: 16px; }
+.address-section-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.address-section-header h3 { margin: 0; }
+.address-section-header p { margin: 5px 0 0; color: #647067; font-size: 11px; line-height: 1.5; }
+.address-section-header > .text-button { flex: 0 0 auto; }
+.address-list { display: grid; gap: 11px; }
+.address-card { display: grid; grid-template-columns: 35px minmax(0, 1fr); gap: 11px; padding: 13px; border: 1px solid #e6ebe2; border-radius: 13px; background: #fff; }
+.address-card-icon { width: 35px; height: 35px; display: grid; place-items: center; border-radius: 10px; background: #f0f6e1; color: #586d2d; font-size: 17px; }
+.address-card-copy { min-width: 0; }
+.address-card-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.address-card-title > strong { color: var(--ink); font-size: 12px; }
+.address-primary-badge { padding: 3px 7px; border-radius: 99px; background: #edf5d7; color: #536928; font-size: 9px; font-weight: 700; }
+.address-card-copy > p { margin: 6px 0 0; color: #535e56; font-size: 11px; line-height: 1.6; }
+.address-card-copy > small, .address-detail-section > small { display: block; margin-top: 4px; color: #647067; font-size: 10px; line-height: 1.5; }
+.address-card-actions { display: flex; flex-wrap: wrap; gap: 8px 13px; margin-top: 9px; }
+.address-card-actions .text-button { font-size: 10px; }
+.address-card-actions .address-remove-button { color: var(--red); }
+.address-detail-section > p { margin: 0; color: #4e5951; font-size: 12px; line-height: 1.65; }
+.address-inline-summary, .address-inline-reference { margin: 1px 0 0; color: #556158; font-size: 10px; line-height: 1.55; }
+.address-inline-reference { color: #69746c; }
+.delivery-address-empty { display: grid; gap: 9px; padding: 12px; border: 1px dashed #dfe6d5; border-radius: 11px; background: #fafbf7; color: #626c64; font-size: 11px; line-height: 1.5; }
+.delivery-address-empty > .text-button { justify-self: start; }
+.delivery-address-cell { display: block; max-width: 270px; min-width: 190px; overflow-wrap: anywhere; line-height: 1.5; }
+.delivery-mobile-card { gap: 10px; }
+.delivery-mobile-address { margin: 0; color: #59645c; font-size: 11px; line-height: 1.55; }
+.delivery-detail { display: grid; gap: 18px; }
+.delivery-detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; border: 1px solid #e8ece3; border-radius: 14px; background: #fafbf8; }
+.delivery-detail-heading > div { min-width: 0; }
+.delivery-detail-heading > div > strong { font-size: 15px; }
+.delivery-detail-heading > div > p { margin: 4px 0 0; color: #68736b; font-size: 10px; }
 
 .activity-list, .timeline { display: grid; }
 .activity-item, .timeline-item { position: relative; display: grid; grid-template-columns: 37px minmax(0, 1fr); gap: 11px; padding: 12px 0; }
@@ -1801,6 +1838,12 @@ img.company-logo-preview { width: 166px; flex-basis: 166px; }
   .settings-tab-icon { width: 15px; height: 15px; font-size: 13px; }
   .customer-profile { gap: 9px; padding: 11px; }
   .customer-profile > div strong { font-size: 12px; }
+  .fulfillment-address-fields { padding: 13px; }
+  .address-section-header { display: grid; }
+  .address-section-header > .text-button { justify-self: start; }
+  .address-card { grid-template-columns: 30px minmax(0, 1fr); gap: 9px; padding: 11px; }
+  .address-card-icon { width: 30px; height: 30px; }
+  .delivery-detail-heading { align-items: flex-start; }
   .order-detail-header { display: grid; gap: 10px; padding: 13px; }
   .order-detail-value { font-size: 16px; }
   .field.full, .form-field.full, .form-section, .form-actions { grid-column: 1; }

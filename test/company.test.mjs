@@ -142,8 +142,8 @@ test('os dados empresariais permanecem em Configurações sem criar outro menu',
     match => match[1]
   );
 
-  assert.equal(views.length, 10);
-  assert.equal(new Set(views).size, 10);
+  assert.equal(views.length, 11);
+  assert.equal(new Set(views).size, 11);
   assert.ok(views.includes('settings'));
   assert.ok(!views.includes('company'));
   assert.match(source, /\bsettings\s*:\s*renderSettings\b/u);

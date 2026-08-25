@@ -7,6 +7,7 @@ const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf
 const expectedViews = [
   'dashboard',
   'orders',
+  'deliveries',
   'customers',
   'products',
   'services',
@@ -119,14 +120,14 @@ test('o atalho para pular navegação aponta para conteúdo principal focalizáv
   assert.ok(main, 'A aplicação precisa expor um landmark semântico main.');
 });
 
-test('a aplicação oferece exatamente dez módulos de navegação exclusivos', () => {
+test('a aplicação oferece exatamente onze módulos de navegação exclusivos', () => {
   const navigationButtons = openingTags('button')
     .filter(attributes => hasClass(attributes, 'nav-item'));
   const actualViews = navigationButtons.map(attributes => attributes['data-view']);
   const uniqueViews = new Set(actualViews);
 
-  assert.equal(navigationButtons.length, 10);
-  assert.equal(uniqueViews.size, 10, 'Cada módulo deve aparecer apenas uma vez no menu.');
+  assert.equal(navigationButtons.length, 11);
+  assert.equal(uniqueViews.size, 11, 'Cada módulo deve aparecer apenas uma vez no menu.');
   assert.deepEqual([...uniqueViews].sort(), [...expectedViews].sort());
 });
 
@@ -134,6 +135,7 @@ test('todos os módulos apresentam rótulos claros em português', () => {
   const expectedLabels = new Map([
     ['dashboard', 'Visão geral'],
     ['orders', 'Ordens de serviço'],
+    ['deliveries', 'Entregas'],
     ['customers', 'Clientes'],
     ['products', 'Produtos e estoque'],
     ['services', 'Serviços'],

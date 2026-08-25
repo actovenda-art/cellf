@@ -20,15 +20,16 @@ const exposedApplication = application.slice(0, bootstrap) + '\n' + [
   '  loadState, saveState, flushStateSave, loadRemoteState, apiRequest,',
   '  setCloudStatus, renderCloudAccess, authenticate, bootstrapApplication, logout,',
   '  esc, normalize, initials, sum,',
+  '  formatPostalCode, normalizeAddress, normalizeCustomerAddresses, primaryAddress, formatAddress, validateAddress,',
   '  localDate, offsetDate, formatDate, formatDateTime,',
   '  formatCnpj, isValidCnpj, formatFileSize, validateCompanyDocument,',
   '  companyDocumentStorageAvailable,',
   '  saveCompanyDocument, readCompanyDocument, deleteCompanyDocument,',
   '  renderCompanyDocuments, handleCompanyDocumentUpload,',
   '  downloadCompanyDocument, removeCompanyDocument,',
-  '  customerOrders, customerSales, recordActivity,',
+  '  customerOrders, customerSales, customerDeliveries, createDeliveryRecord, syncRepairDeliveries, completeOrderDeliveries, recordActivity,',
   '  cartSubtotal, cartTotal, addCartProduct, completeSale,',
-  '  agendaEvents, withinPeriod, reportData, renderSales, renderReports,',
+  '  agendaEvents, withinPeriod, reportData, renderSales, renderDeliveries, renderReports,',
   '  commandSearch, refreshBadges, syncShell, toggleMenu, closeMenu, navigate',
   '};'
 ].join('\n');
@@ -131,7 +132,7 @@ class FakeDocument {
     this.body = new FakeElement('body');
     this.activeElement = this.body;
     this.views = [
-      'dashboard', 'orders', 'customers', 'products', 'services',
+      'dashboard', 'orders', 'deliveries', 'customers', 'products', 'services',
       'sales', 'payables', 'reports', 'settings', 'agenda'
     ].map(view => {
       const element = new FakeElement('nav-' + view);
@@ -142,7 +143,7 @@ class FakeDocument {
     });
 
     for (const id of [
-      'app-content', 'toast-region', 'nav-orders-count', 'notification-dot',
+      'app-content', 'toast-region', 'nav-orders-count', 'nav-deliveries-count', 'notification-dot',
       'profile-name', 'profile-role', 'brand-caption', 'topbar-date',
       'pos-search', 'command-results', 'sidebar', 'sidebar-backdrop',
       'menu-button', 'sidebar-close', 'current-view-label', 'topbar-context',
@@ -399,9 +400,43 @@ test('dados recebidos da nuvem são normalizados sem duplicar telefones equivale
   assert.equal(api.state.settings.managerName, 'Responsável legado');
   assert.equal(api.state.settings.companyName, 'Cellf');
 
-  for (const collection of ['sales', 'appointments', 'stockMovements', 'activity']) {
+  for (const collection of ['sales', 'deliveries', 'appointments', 'stockMovements', 'activity']) {
     assert.ok(Array.isArray(api.state[collection]));
   }
+});
+
+test('cadastros antigos recebem modalidades padrão e endereços estruturados sem perder dados', () => {
+  const legacy = fixture({
+    customers: [{ id: 'cliente-legado', name: 'Pessoa Legada', phone: '11977770000', address: 'Rua das Flores', city: 'São Paulo', postalCode: '01310100' }],
+    orders: [{ id: 'OS-LEGADA', customerId: 'cliente-legado', customer: 'Pessoa Legada', phone: '11977770000', createdAt: dateOffset() }],
+    sales: [{ id: 'v-legada', customerId: 'cliente-legado', customer: 'Pessoa Legada', items: [], total: 0 }]
+  });
+  delete legacy.deliveries;
+
+  const { api } = createApplication({ stored: legacy });
+  const address = api.state.customers[0].addresses[0];
+
+  assert.equal(api.state.orders[0].attendanceType, 'in_store_service');
+  assert.equal(api.state.sales[0].attendanceType, 'counter_sale');
+  assert.equal(address.street, 'Rua das Flores');
+  assert.equal(address.postalCode, '01310-100');
+  assert.equal(address.primary, true);
+  assert.deepEqual(plain(api.state.deliveries), []);
+});
+
+test('endereços brasileiros são formatados, validados e identificam um endereço principal', () => {
+  const { api } = createApplication();
+  const address = api.normalizeAddress({ id: 'end-casa', label: 'Casa', postalCode: '01310100', street: 'Avenida Paulista', number: '1578', complement: 'Sala 4', neighborhood: 'Bela Vista', city: 'São Paulo', region: 'sp', reference: 'Ao lado do metrô', primary: true });
+
+  assert.equal(api.formatPostalCode('01310-100'), '01310-100');
+  assert.equal(address.region, 'SP');
+  assert.equal(api.validateAddress(address), '');
+  assert.match(api.formatAddress(address), /Avenida Paulista, 1578/u);
+  assert.match(api.formatAddress(address), /Bela Vista · São Paulo \/ SP/u);
+  assert.match(api.formatAddress(address), /CEP 01310-100/u);
+  assert.equal(api.primaryAddress({ addresses: [address] }).id, 'end-casa');
+  assert.match(api.validateAddress({ ...address, postalCode: '01310' }), /CEP válido/u);
+  assert.match(api.validateAddress({ ...address, region: 'S' }), /UF/u);
 });
 
 test('clientes existentes são associados por telefone ou nome sem perder seus códigos', () => {
@@ -577,6 +612,114 @@ test('vendas sem cliente vinculado são registradas como atendimento de balcão'
   assert.equal(api.state.sales[0].customerId, '');
   assert.equal(api.state.sales[0].customer, 'Cliente de balcão');
   assert.equal(api.state.sales[0].payment, 'cash');
+  assert.equal(api.state.sales[0].attendanceType, 'counter_sale');
+  assert.equal(api.state.deliveries.length, 0);
+});
+
+test('venda para entrega exige endereço, cria a rota e salva cliente, compra e logística na nuvem', async () => {
+  const address = { id: 'end-entrega', label: 'Casa', postalCode: '01310-100', street: 'Avenida Paulista', number: '1578', complement: 'Sala 4', neighborhood: 'Bela Vista', city: 'São Paulo', region: 'SP', reference: 'Portaria principal', primary: true };
+  const stored = fixture({ customers: [{ ...fixture().customers[0], addresses: [address] }] });
+  const { api, remoteState, document } = createApplication({ stored });
+
+  api.addCartProduct('produto-capa');
+  api.cart.attendanceType = 'delivery';
+  api.cart.customerId = 'cliente-teste';
+  api.cart.addressId = 'end-entrega';
+  api.renderSales();
+
+  assert.match(document.querySelector('#app-content').innerHTML, /ENDEREÇO DE ENTREGA/u);
+  assert.match(document.querySelector('#app-content').innerHTML, /Avenida Paulista/u);
+
+  api.completeSale();
+  await api.flushStateSave();
+
+  const sale = api.state.sales[0];
+  const delivery = api.state.deliveries[0];
+
+  assert.equal(sale.attendanceType, 'delivery');
+  assert.equal(sale.deliveryAddress.id, 'end-entrega');
+  assert.equal(delivery.kind, 'sale_delivery');
+  assert.equal(delivery.sourceType, 'sale');
+  assert.equal(delivery.sourceId, sale.id);
+  assert.equal(delivery.customerId, 'cliente-teste');
+  assert.equal(delivery.address.reference, 'Portaria principal');
+  assert.equal(delivery.status, 'scheduled');
+  assert.equal(remoteState.value.sales[0].attendanceType, 'delivery');
+  assert.equal(remoteState.value.deliveries[0].address.postalCode, '01310-100');
+  assert.equal(document.querySelector('#nav-deliveries-count').textContent, 1);
+  assert.equal(api.cart.attendanceType, 'counter_sale');
+});
+
+test('entrega sem cliente ou sem endereço não baixa estoque nem cria vendas', () => {
+  const { api, messages } = createApplication();
+
+  api.addCartProduct('produto-capa');
+  api.cart.attendanceType = 'delivery';
+  api.completeSale();
+
+  assert.equal(api.state.sales.length, 0);
+  assert.equal(api.state.products[0].stock, 3);
+  assert.match(messages().at(-1).textContent, /Selecione o cliente/u);
+
+  api.cart.customerId = 'cliente-teste';
+  api.completeSale();
+
+  assert.equal(api.state.sales.length, 0);
+  assert.equal(api.state.deliveries.length, 0);
+  assert.match(messages().at(-1).textContent, /Cadastre um endereço/u);
+});
+
+test('busca e leva cria coleta e devolução sem duplicar movimentações ao editar a ordem', () => {
+  const { api } = createApplication();
+  const customer = api.state.customers[0];
+  const address = api.normalizeAddress({ id: 'end-busca', label: 'Trabalho', postalCode: '04538132', street: 'Rua Funchal', number: '418', neighborhood: 'Vila Olímpia', city: 'São Paulo', region: 'SP', primary: true });
+  const order = { id: 'OS-2001', attendanceType: 'pickup_return', status: 'analysis', createdAt: dateOffset(), dueAt: dateOffset(2) };
+
+  api.syncRepairDeliveries(order, customer, address);
+
+  assert.equal(api.state.deliveries.length, 2);
+  assert.deepEqual(plain(api.state.deliveries.map(item => item.kind).sort()), ['repair_pickup', 'repair_return']);
+  assert.ok(api.state.deliveries.every(item => item.sourceId === 'OS-2001' && item.customerId === customer.id));
+
+  order.dueAt = dateOffset(4);
+  api.syncRepairDeliveries(order, customer, address);
+
+  assert.equal(api.state.deliveries.length, 2);
+  assert.equal(api.state.deliveries.find(item => item.kind === 'repair_return').scheduledDate, dateOffset(4));
+
+  api.completeOrderDeliveries(order);
+
+  assert.ok(api.state.deliveries.every(item => item.status === 'completed' && item.completedAt));
+});
+
+test('alterar um busca e leva para serviço em loja cancela as movimentações pendentes', () => {
+  const { api } = createApplication();
+  const customer = api.state.customers[0];
+  const address = api.normalizeAddress({ postalCode: '01310100', street: 'Rua A', number: '10', neighborhood: 'Centro', city: 'São Paulo', region: 'SP' });
+  const order = { id: 'OS-2002', attendanceType: 'pickup_return', status: 'analysis', createdAt: dateOffset(), dueAt: dateOffset(2) };
+
+  api.syncRepairDeliveries(order, customer, address);
+  order.attendanceType = 'in_store_service';
+  api.syncRepairDeliveries(order, customer, null);
+
+  assert.equal(api.state.deliveries.length, 2);
+  assert.ok(api.state.deliveries.every(item => item.status === 'cancelled'));
+});
+
+test('entregas registradas aparecem na agenda e na tela operacional com o endereço', () => {
+  const address = { id: 'end-agenda', label: 'Casa', postalCode: '01310-100', street: 'Avenida Paulista', number: '1578', neighborhood: 'Bela Vista', city: 'São Paulo', region: 'SP', primary: true };
+  const delivery = { id: 'ent-agenda', sourceType: 'sale', sourceId: 'v-agenda', kind: 'sale_delivery', customerId: 'cliente-teste', customer: 'Cliente de Teste', phone: '11999990000', address, scheduledDate: dateOffset(), status: 'scheduled' };
+  const { api, document } = createApplication({ stored: fixture({ deliveries: [delivery] }) });
+
+  assert.ok(api.agendaEvents(dateOffset()).some(event => event.deliveryId === 'ent-agenda' && event.subtitle.includes('Avenida Paulista')));
+
+  api.renderDeliveries();
+
+  const html = document.querySelector('#app-content').innerHTML;
+  assert.match(html, /Entregas e busca e leva/u);
+  assert.match(html, /Entrega de compra/u);
+  assert.match(html, /Avenida Paulista/u);
+  assert.match(html, /data-action="delivery-status"/u);
 });
 
 test('uma venda vazia não altera estoque, histórico nem armazenamento', () => {
@@ -797,10 +940,10 @@ test('o menu móvel sincroniza estado aberto, camada de fundo e acessibilidade',
   assert.equal(document.body.classList.contains('menu-open'), false);
 });
 
-test('os dez módulos renderizam e atualizam a navegação sem depender de navegador real', () => {
+test('os onze módulos renderizam e atualizam a navegação sem depender de navegador real', () => {
   const { api, document, window } = createApplication();
   const views = [
-    'dashboard', 'orders', 'customers', 'products', 'services',
+    'dashboard', 'orders', 'deliveries', 'customers', 'products', 'services',
     'sales', 'payables', 'reports', 'settings', 'agenda'
   ];
 
