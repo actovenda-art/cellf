@@ -104,7 +104,7 @@ let selectedAgendaDate = localDate();
 let reportPeriod = 30;
 let salesQuery = '';
 let lastFocusedElement = null;
-let cart = { items: [], customerId: '', payment: 'pix', discount: 0, attendanceType: 'counter_sale', addressId: '' };
+let cart = { items: [], customerId: '', payment: 'pix', discount: 0, attendanceType: 'counter_sale', deliveryAddress: null };
 let activeSettingsTab = 'empresa';
 let companyDocumentUploadInFlight = false;
 let cloudConnection = { status: 'connecting', authenticated: false, detail: '', updatedAt: null };
@@ -136,7 +136,7 @@ function loadState(source = structuredClone(seed)) {
       services: Array.isArray(stored.services) ? stored.services : structuredClone(seed.services),
       orders: (Array.isArray(stored.orders) ? stored.orders : structuredClone(seed.orders)).map(order => ({ ...order, attendanceType: order.attendanceType === 'pickup_return' ? 'pickup_return' : 'in_store_service' })),
       payables: Array.isArray(stored.payables) ? stored.payables : structuredClone(seed.payables),
-      customers: Array.isArray(stored.customers) ? stored.customers.map(customer => ({ ...customer, addresses: normalizeCustomerAddresses(customer) })) : [],
+      customers: Array.isArray(stored.customers) ? stored.customers.map(removeCustomerAddressData) : [],
       sales: Array.isArray(stored.sales) ? stored.sales.map(sale => ({ ...sale, attendanceType: sale.attendanceType === 'delivery' ? 'delivery' : 'counter_sale' })) : [],
       deliveries: Array.isArray(stored.deliveries) ? stored.deliveries : [],
       appointments: Array.isArray(stored.appointments) ? stored.appointments : [],
@@ -161,7 +161,6 @@ function loadState(source = structuredClone(seed)) {
           email: '',
           document: '',
           notes: '',
-          addresses: [],
           createdAt: order.createdAt || localDate(),
           active: true
         };
@@ -182,7 +181,6 @@ function loadState(source = structuredClone(seed)) {
         email: '',
         document: '',
         notes: '',
-        addresses: [],
         createdAt: order.createdAt,
         active: true
       }))
@@ -317,7 +315,7 @@ function normalizeAddress(address = {}, fallbackId = '') {
   const source = address && typeof address === 'object' ? address : { street: String(address || '') };
   return {
     id: String(source.id || fallbackId || uid('end')),
-    label: String(source.label || 'Principal').trim() || 'Principal',
+    label: String(source.label || 'Endereço do pedido').trim() || 'Endereço do pedido',
     postalCode: formatPostalCode(source.postalCode || source.cep || ''),
     street: String(source.street || source.address || source.logradouro || '').trim(),
     number: String(source.number || source.numero || '').trim(),
@@ -329,15 +327,9 @@ function normalizeAddress(address = {}, fallbackId = '') {
     primary: Boolean(source.primary)
   };
 }
-function normalizeCustomerAddresses(customer = {}) {
-  const sources = Array.isArray(customer.addresses) ? customer.addresses : customer.address ? [typeof customer.address === 'object' ? customer.address : { street: customer.address, postalCode: customer.postalCode, city: customer.city }] : [];
-  const addresses = sources.filter(Boolean).map((address, index) => normalizeAddress(address, `end-${customer.id || 'cliente'}-${index + 1}`));
-  if (addresses.length && !addresses.some(address => address.primary)) addresses[0].primary = true;
-  return addresses;
-}
-function primaryAddress(customer) {
-  const addresses = Array.isArray(customer?.addresses) ? customer.addresses : [];
-  return addresses.find(address => address.primary) || addresses[0] || null;
+function removeCustomerAddressData(customer = {}) {
+  const { addresses, address, postalCode, cep, street, number, complement, neighborhood, city, region, state: addressState, uf, reference, ...record } = customer;
+  return record;
 }
 function formatAddress(address, { compact = false } = {}) {
   if (!address) return '';
@@ -357,7 +349,7 @@ function validateAddress(address) {
 function addressFromForm(data, existing = {}) {
   return normalizeAddress({
     ...existing,
-    label: data.addressLabel || existing.label || 'Principal',
+    label: existing.label || 'Endereço do pedido',
     postalCode: data.postalCode,
     street: data.street,
     number: data.number,
@@ -369,9 +361,10 @@ function addressFromForm(data, existing = {}) {
     primary: existing.primary ?? false
   }, existing.id);
 }
-function addressFieldsMarkup(address = {}, { required = false } = {}) {
+function addressFieldsMarkup(address = {}, { required = false, action = '' } = {}) {
   const mandatory = required ? ' required' : '';
-  return `<div class="field"><label>NOME DO ENDEREÇO</label><input name="addressLabel" value="${esc(address.label || 'Principal')}" placeholder="Casa, trabalho ou principal"></div><div class="field"><label>CEP${required ? ' *' : ''}</label><input name="postalCode" inputmode="numeric" maxlength="9" autocomplete="postal-code" value="${esc(formatPostalCode(address.postalCode))}" placeholder="00000-000"${mandatory}></div><div class="field full"><label>RUA / AVENIDA${required ? ' *' : ''}</label><input name="street" autocomplete="address-line1" value="${esc(address.street)}" placeholder="Nome da rua, avenida ou travessa"${mandatory}></div><div class="field"><label>NÚMERO${required ? ' *' : ''}</label><input name="number" value="${esc(address.number)}" placeholder="Número ou S/N"${mandatory}></div><div class="field"><label>COMPLEMENTO</label><input name="complement" autocomplete="address-line2" value="${esc(address.complement)}" placeholder="Apartamento, bloco, casa..."></div><div class="field"><label>BAIRRO${required ? ' *' : ''}</label><input name="neighborhood" value="${esc(address.neighborhood)}" placeholder="Bairro"${mandatory}></div><div class="field"><label>CIDADE${required ? ' *' : ''}</label><input name="city" autocomplete="address-level2" value="${esc(address.city)}" placeholder="Cidade"${mandatory}></div><div class="field"><label>UF${required ? ' *' : ''}</label><input name="region" maxlength="2" autocomplete="address-level1" value="${esc(address.region)}" placeholder="SP"${mandatory}></div><div class="field"><label>PONTO DE REFERÊNCIA</label><input name="reference" value="${esc(address.reference)}" placeholder="Portaria, comércio próximo..."></div>`;
+  const fieldAction = action ? ` data-action="${esc(action)}"` : '';
+  return `<div class="field"><label>CEP${required ? ' *' : ''}</label><input name="postalCode" inputmode="numeric" maxlength="9" autocomplete="postal-code" value="${esc(formatPostalCode(address.postalCode))}" placeholder="00000-000"${mandatory}${fieldAction}></div><div class="field full"><label>RUA / AVENIDA${required ? ' *' : ''}</label><input name="street" autocomplete="address-line1" value="${esc(address.street)}" placeholder="Nome da rua, avenida ou travessa"${mandatory}${fieldAction}></div><div class="field"><label>NÚMERO${required ? ' *' : ''}</label><input name="number" value="${esc(address.number)}" placeholder="Número ou S/N"${mandatory}${fieldAction}></div><div class="field"><label>COMPLEMENTO</label><input name="complement" autocomplete="address-line2" value="${esc(address.complement)}" placeholder="Apartamento, bloco, casa..."${fieldAction}></div><div class="field"><label>BAIRRO${required ? ' *' : ''}</label><input name="neighborhood" value="${esc(address.neighborhood)}" placeholder="Bairro"${mandatory}${fieldAction}></div><div class="field"><label>CIDADE${required ? ' *' : ''}</label><input name="city" autocomplete="address-level2" value="${esc(address.city)}" placeholder="Cidade"${mandatory}${fieldAction}></div><div class="field"><label>UF${required ? ' *' : ''}</label><input name="region" maxlength="2" autocomplete="address-level1" value="${esc(address.region)}" placeholder="SP"${mandatory}${fieldAction}></div><div class="field"><label>PONTO DE REFERÊNCIA</label><input name="reference" value="${esc(address.reference)}" placeholder="Portaria, comércio próximo..."${fieldAction}></div>`;
 }
 function formatCnpj(value = '') {
   return String(value).replace(/\D/g, '').slice(0, 14)
@@ -444,7 +437,6 @@ function customerOrders(customer) {
   return state.orders.filter(order => order.customerId === customer.id || normalize(order.customer) === normalize(customer.name));
 }
 function customerSales(customer) { return state.sales.filter(sale => sale.customerId === customer.id); }
-function customerDeliveries(customer) { return state.deliveries.filter(delivery => delivery.customerId === customer.id); }
 function createDeliveryRecord({ sourceType, sourceId, kind, customer, address, scheduledDate }) {
   return {
     id: uid('ent'),
@@ -642,8 +634,7 @@ function customerRows(list) {
     const sales = customerSales(customer);
     const last = [...orders.map(order => order.createdAt), ...sales.map(sale => String(sale.createdAt).slice(0, 10))].filter(Boolean).sort().at(-1);
     const total = sum(orders.filter(order => order.status !== 'cancelled'), 'value') + sum(sales.filter(sale => sale.status !== 'cancelled'), 'total');
-    const address = primaryAddress(customer);
-    return `<tr><td><div class="cell-main"><span class="customer-avatar avatar">${esc(initials(customer.name))}</span><span><strong>${esc(customer.name)}</strong><small>${customer.active === false ? 'Cadastro inativo' : address ? esc([address.neighborhood, address.city].filter(Boolean).join(' · ')) : esc(customer.document || 'Endereço não cadastrado')}</small></span></div></td><td>${esc(customer.phone || '—')}<br><small>${esc(customer.email || 'Sem e-mail')}</small></td><td>${orders.length} ${orders.length === 1 ? 'ordem' : 'ordens'} · ${sales.length} ${sales.length === 1 ? 'venda' : 'vendas'}</td><td class="money">${brl.format(total)}</td><td>${formatDate(last)}</td><td><button class="more-button" data-action="view-customer" data-id="${esc(customer.id)}" aria-label="Ver ${esc(customer.name)}">•••</button></td></tr>`;
+    return `<tr><td><div class="cell-main"><span class="customer-avatar avatar">${esc(initials(customer.name))}</span><span><strong>${esc(customer.name)}</strong><small>${customer.active === false ? 'Cadastro inativo' : esc(customer.document || 'Cliente Cellf')}</small></span></div></td><td>${esc(customer.phone || '—')}<br><small>${esc(customer.email || 'Sem e-mail')}</small></td><td>${orders.length} ${orders.length === 1 ? 'ordem' : 'ordens'} · ${sales.length} ${sales.length === 1 ? 'venda' : 'vendas'}</td><td class="money">${brl.format(total)}</td><td>${formatDate(last)}</td><td><button class="more-button" data-action="view-customer" data-id="${esc(customer.id)}" aria-label="Ver ${esc(customer.name)}">•••</button></td></tr>`;
   }).join('') : '<tr><td colspan="6"><div class="table-empty">Nenhum cliente encontrado.</div></td></tr>'}</tbody>`;
 }
 
@@ -676,7 +667,7 @@ function renderDeliveries() {
   const today = active.filter(delivery => delivery.scheduledDate === isoToday());
   const pickups = active.filter(delivery => delivery.kind === 'repair_pickup');
   const completed = state.deliveries.filter(delivery => delivery.status === 'completed');
-  content.innerHTML = `${pageHeading('LOGÍSTICA', 'Entregas e busca e leva', `${active.length} ${active.length === 1 ? 'movimentação pendente' : 'movimentações pendentes'}`, '<button class="ghost-button" data-view="customers">♧ Endereços dos clientes</button><button class="primary-button" data-view="sales">＋ Nova entrega</button>')}
+  content.innerHTML = `${pageHeading('LOGÍSTICA', 'Entregas e busca e leva', `${active.length} ${active.length === 1 ? 'movimentação pendente' : 'movimentações pendentes'}`, '<button class="ghost-button" data-view="orders">⌁ Ordens de serviço</button><button class="primary-button" data-view="sales">＋ Nova entrega</button>')}
     <div class="summary-strip insight-grid">${statCard('PENDENTES', active.length, '↗', `${active.filter(delivery => delivery.scheduledDate < isoToday()).length} em atraso`, true)}${statCard('PARA HOJE', today.length, '◷', 'Entregas e coletas do dia')}${statCard('BUSCAS DE APARELHOS', pickups.length, '⌁', 'Coletas aguardando saída')}${statCard('CONCLUÍDAS', completed.length, '✓', 'Movimentações finalizadas')}</div>
     ${tableShell('deliveries', '<option value="">Todas as movimentações</option><option value="scheduled">Agendadas</option><option value="in_transit">Em andamento</option><option value="sale_delivery">Entrega de compra</option><option value="repair_pickup">Busca de aparelho</option><option value="repair_return">Devolução do reparo</option><option value="completed">Concluídas</option><option value="cancelled">Canceladas</option>', deliveryRows(state.deliveries), deliveryMobile(state.deliveries), state.deliveries.length)}`;
   bindTableFilter('deliveries');
@@ -711,7 +702,7 @@ function bindTableFilter(type) {
   const update = () => {
     const q = normalize(input.value.trim());
     const f = select.value;
-    let list = state[type].filter(item => normalize(`${Object.values(item).join(' ')} ${item.address ? formatAddress(item.address) : ''} ${(item.addresses || []).map(address => formatAddress(address)).join(' ')}`).includes(q));
+    let list = state[type].filter(item => normalize(`${Object.values(item).join(' ')} ${item.address ? formatAddress(item.address) : ''} ${item.deliveryAddress ? formatAddress(item.deliveryAddress) : ''}`).includes(q));
     if (f) {
       if (type === 'products') list = list.filter(product => f === '__low__' ? product.stock <= product.minimum : product.category === f);
       if (type === 'services') list = list.filter(service => f === 'inactive' ? !service.active : service.pricing === f);
@@ -735,8 +726,6 @@ function renderSales() {
   const monthSales = state.sales.filter(sale => String(sale.createdAt).slice(0, 7) === today.slice(0, 7) && sale.status !== 'cancelled');
   const products = state.products.filter(product => normalize(`${product.name} ${product.sku} ${product.category}`).includes(normalize(salesQuery)));
   const activeCustomers = state.customers.filter(customer => customer.active !== false);
-  const selectedCustomer = activeCustomers.find(customer => customer.id === cart.customerId);
-  const selectedAddress = selectedCustomer?.addresses.find(address => address.id === cart.addressId) || primaryAddress(selectedCustomer);
   const deliverySale = cart.attendanceType === 'delivery';
   content.innerHTML = `${pageHeading('COMERCIAL', 'Vendas e caixa', 'Venda produtos, acompanhe o caixa e mantenha o estoque sincronizado.')}
     <div class="summary-strip insight-grid">${statCard('VENDAS DE HOJE', brl.format(sum(todaySales, 'total')), '↗', `${todaySales.length} ${todaySales.length === 1 ? 'atendimento' : 'atendimentos'}`, true)}${statCard('FATURAMENTO NO MÊS', brl.format(sum(monthSales, 'total')), '◈', `${monthSales.length} vendas concluídas`)}${statCard('TÍQUETE MÉDIO', monthSales.length ? brl.format(sum(monthSales, 'total') / monthSales.length) : brl.format(0), '⌁', 'Média por venda no mês')}${statCard('PRODUTOS VENDIDOS', monthSales.reduce((total, sale) => total + sale.items.reduce((quantity, item) => quantity + item.quantity, 0), 0), '◇', 'Unidades vendidas no mês')}</div>
@@ -751,7 +740,7 @@ function renderSales() {
       </section>
       <aside class="card pos-cart"><header class="card-header"><div><p class="eyebrow">CAIXA</p><h2>Venda atual</h2></div>${cart.items.length ? '<button class="text-button" data-action="clear-cart">Limpar</button>' : ''}</header>
         <div class="pos-cart-content">${cart.items.length ? cart.items.map(item => `<div class="cart-item"><div class="cart-item-info"><strong>${esc(item.name)}</strong><small>${brl.format(item.unitPrice)} cada</small></div><div class="cart-item-actions"><button class="icon-action" data-action="cart-decrease" data-id="${esc(item.productId)}" aria-label="Diminuir quantidade">−</button><strong>${item.quantity}</strong><button class="icon-action" data-action="cart-increase" data-id="${esc(item.productId)}" aria-label="Aumentar quantidade">＋</button></div><strong class="money">${brl.format(item.quantity * item.unitPrice)}</strong></div>`).join('') : emptyState('Sua venda começa aqui', 'Escolha produtos ao lado para adicionar ao carrinho.')}
-          ${cart.items.length ? `<div class="cart-fields"><div class="field"><label for="sale-attendance-type">TIPO DE ATENDIMENTO</label><select id="sale-attendance-type" data-action="sale-attendance-type"><option value="counter_sale" ${!deliverySale ? 'selected' : ''}>${ATTENDANCE_LABELS.counter_sale}</option><option value="delivery" ${deliverySale ? 'selected' : ''}>${ATTENDANCE_LABELS.delivery}</option></select></div><div class="field"><label for="sale-customer">CLIENTE${deliverySale ? ' *' : ''}</label><select id="sale-customer" data-action="sale-customer"><option value="">${deliverySale ? 'Selecione o cliente da entrega' : 'Cliente de balcão'}</option>${activeCustomers.map(customer => `<option value="${esc(customer.id)}" ${customer.id === cart.customerId ? 'selected' : ''}>${esc(customer.name)}</option>`).join('')}</select></div>${deliverySale ? `<div class="field"><label for="sale-address">ENDEREÇO DE ENTREGA *</label>${selectedCustomer?.addresses.length ? `<select id="sale-address" data-action="sale-address">${selectedCustomer.addresses.map(address => `<option value="${esc(address.id)}" ${selectedAddress?.id === address.id ? 'selected' : ''}>${esc(address.label)} · ${esc(address.street)}, ${esc(address.number)}</option>`).join('')}</select><p class="address-inline-summary">${esc(formatAddress(selectedAddress))}</p>${selectedAddress?.reference ? `<p class="address-inline-reference">Referência: ${esc(selectedAddress.reference)}</p>` : ''}` : `<div class="delivery-address-empty"><span>${selectedCustomer ? 'Este cliente ainda não possui endereço cadastrado.' : 'Selecione um cliente para escolher o endereço.'}</span>${selectedCustomer ? `<button type="button" class="text-button" data-action="add-customer-address" data-id="${esc(selectedCustomer.id)}">＋ Cadastrar endereço</button>` : ''}</div>`}</div>` : ''}<div class="field"><label for="sale-payment">FORMA DE PAGAMENTO</label><select id="sale-payment" data-action="sale-payment">${Object.entries(PAYMENT_LABELS).map(([value, label]) => `<option value="${value}" ${value === cart.payment ? 'selected' : ''}>${label}</option>`).join('')}</select></div><div class="field"><label for="sale-discount">DESCONTO (R$)</label><input id="sale-discount" data-action="sale-discount" type="number" min="0" step="0.01" value="${cart.discount || ''}" placeholder="0,00"></div></div>
+          ${cart.items.length ? `<div class="cart-fields"><div class="field"><label for="sale-attendance-type">TIPO DE ATENDIMENTO</label><select id="sale-attendance-type" data-action="sale-attendance-type"><option value="counter_sale" ${!deliverySale ? 'selected' : ''}>${ATTENDANCE_LABELS.counter_sale}</option><option value="delivery" ${deliverySale ? 'selected' : ''}>${ATTENDANCE_LABELS.delivery}</option></select></div><div class="field"><label for="sale-customer">CLIENTE${deliverySale ? ' *' : ''}</label><select id="sale-customer" data-action="sale-customer"><option value="">${deliverySale ? 'Selecione o cliente da entrega' : 'Cliente de balcão'}</option>${activeCustomers.map(customer => `<option value="${esc(customer.id)}" ${customer.id === cart.customerId ? 'selected' : ''}>${esc(customer.name)}</option>`).join('')}</select></div>${deliverySale ? `<section class="sale-delivery-address"><div class="address-form-heading"><h3>Endereço deste pedido</h3><p>Informado somente nesta entrega, sem alterar o cadastro do cliente.</p></div><div class="form-grid sale-address-grid">${addressFieldsMarkup(cart.deliveryAddress || {}, { required: true, action: 'sale-address-field' })}</div></section>` : ''}<div class="field"><label for="sale-payment">FORMA DE PAGAMENTO</label><select id="sale-payment" data-action="sale-payment">${Object.entries(PAYMENT_LABELS).map(([value, label]) => `<option value="${value}" ${value === cart.payment ? 'selected' : ''}>${label}</option>`).join('')}</select></div><div class="field"><label for="sale-discount">DESCONTO (R$)</label><input id="sale-discount" data-action="sale-discount" type="number" min="0" step="0.01" value="${cart.discount || ''}" placeholder="0,00"></div></div>
           <div class="cart-summary"><div><span>Subtotal</span><strong>${brl.format(cartSubtotal())}</strong></div><div><span>Desconto</span><strong>− ${brl.format(Math.min(Number(cart.discount || 0), cartSubtotal()))}</strong></div><div class="cart-total"><span>Total a receber</span><strong>${brl.format(cartTotal())}</strong></div></div><button class="primary-button pos-checkout" data-action="complete-sale">✓ Finalizar venda</button>` : ''}
         </div>
       </aside>
@@ -803,8 +792,8 @@ function completeSale() {
   const customer = state.customers.find(entry => entry.id === cart.customerId);
   const deliverySale = cart.attendanceType === 'delivery';
   if (deliverySale && !customer) return toast('Selecione o cliente para realizar uma entrega.', 'error');
-  const deliveryAddress = deliverySale ? customer.addresses.find(address => address.id === cart.addressId) || primaryAddress(customer) : null;
-  if (deliverySale && !deliveryAddress) return toast('Cadastre um endereço válido para entregar a compra.', 'error');
+  const deliveryAddress = deliverySale && cart.deliveryAddress ? normalizeAddress(cart.deliveryAddress) : null;
+  if (deliverySale && !deliveryAddress) return toast('Informe o endereço de entrega diretamente neste pedido.', 'error');
   if (deliverySale && validateAddress(deliveryAddress)) return toast(validateAddress(deliveryAddress), 'error');
   const sale = {
     id: uid('v'),
@@ -831,7 +820,7 @@ function completeSale() {
   if (deliverySale) state.deliveries.unshift(createDeliveryRecord({ sourceType: 'sale', sourceId: sale.id, kind: 'sale_delivery', customer, address: deliveryAddress, scheduledDate: isoToday() }));
   state.stockMovements = state.stockMovements.slice(0, 200);
   recordActivity('sale', `Venda ${sale.id.toUpperCase()} concluída · ${brl.format(sale.total)}`);
-  cart = { items: [], customerId: '', payment: 'pix', discount: 0, attendanceType: 'counter_sale', addressId: '' };
+  cart = { items: [], customerId: '', payment: 'pix', discount: 0, attendanceType: 'counter_sale', deliveryAddress: null };
   saveState();
   renderSales();
   toast(`Venda concluída: ${brl.format(sale.total)} via ${PAYMENT_LABELS[sale.payment]}${deliverySale ? ' · entrega adicionada à logística' : ''}.`);
@@ -1324,8 +1313,7 @@ function closeModal() {
 function formActions(label='Salvar cadastro') { return `<div class="form-actions"><button type="button" class="ghost-button" data-action="close-modal">Cancelar</button><button class="primary-button" type="submit">${label}</button></div>`; }
 
 function customerModal(customer = {}) {
-  const preferredAddress = primaryAddress(customer);
-  openModal(customer.id ? 'Editar cliente' : 'Novo cliente', 'RELACIONAMENTO', `<form id="customer-form" class="form-grid"><div class="field full"><label>NOME COMPLETO *</label><input name="name" required value="${esc(customer.name)}" placeholder="Nome completo do cliente"></div><div class="field"><label>TELEFONE / WHATSAPP *</label><input name="phone" required value="${esc(customer.phone)}" placeholder="(11) 99999-9999"></div><div class="field"><label>CPF / CNPJ</label><input name="document" value="${esc(customer.document)}" placeholder="000.000.000-00"></div><div class="field full"><label>E-MAIL</label><input name="email" type="email" value="${esc(customer.email)}" placeholder="cliente@email.com"></div><div class="form-section address-form-heading"><h3>Endereço principal</h3><p>Necessário para entregas e atendimentos busca e leva.</p></div>${addressFieldsMarkup(preferredAddress || {})}<div class="field full"><label>OBSERVAÇÕES</label><textarea name="notes" placeholder="Preferências, orientações ou informações importantes...">${esc(customer.notes)}</textarea></div>${customer.id ? `<label class="field full checkbox-field"><span><input name="active" type="checkbox" ${customer.active !== false ? 'checked' : ''}> Cliente ativo para novos atendimentos</span></label>` : ''}${formActions(customer.id ? 'Salvar alterações' : 'Cadastrar cliente')}</form>`);
+  openModal(customer.id ? 'Editar cliente' : 'Novo cliente', 'RELACIONAMENTO', `<form id="customer-form" class="form-grid"><div class="field full"><label>NOME COMPLETO *</label><input name="name" required value="${esc(customer.name)}" placeholder="Nome completo do cliente"></div><div class="field"><label>TELEFONE / WHATSAPP *</label><input name="phone" required value="${esc(customer.phone)}" placeholder="(11) 99999-9999"></div><div class="field"><label>CPF / CNPJ</label><input name="document" value="${esc(customer.document)}" placeholder="000.000.000-00"></div><div class="field full"><label>E-MAIL</label><input name="email" type="email" value="${esc(customer.email)}" placeholder="cliente@email.com"></div><div class="field full"><label>OBSERVAÇÕES</label><textarea name="notes" placeholder="Preferências, orientações ou informações importantes...">${esc(customer.notes)}</textarea></div>${customer.id ? `<label class="field full checkbox-field"><span><input name="active" type="checkbox" ${customer.active !== false ? 'checked' : ''}> Cliente ativo para novos atendimentos</span></label>` : ''}${formActions(customer.id ? 'Salvar alterações' : 'Cadastrar cliente')}</form>`);
   document.querySelector('#customer-form').addEventListener('submit', event => {
     event.preventDefault();
     const form = new FormData(event.target);
@@ -1333,13 +1321,7 @@ function customerModal(customer = {}) {
     const digits = data.phone.replace(/\D/g, '');
     const duplicate = state.customers.find(entry => entry.id !== customer.id && digits && String(entry.phone || '').replace(/\D/g, '') === digits);
     if (duplicate) return toast(`Já existe um cliente com este telefone: ${duplicate.name}.`, 'error');
-    const addressEntered = ['postalCode', 'street', 'number', 'complement', 'neighborhood', 'city', 'region', 'reference'].some(field => String(data[field] || '').trim());
-    const updatedAddress = addressEntered ? addressFromForm(data, { ...(preferredAddress || {}), primary: true }) : null;
-    if (updatedAddress && validateAddress(updatedAddress)) return toast(validateAddress(updatedAddress), 'error');
-    const addresses = (customer.addresses || []).filter(address => address.id !== preferredAddress?.id).map(address => ({ ...address, primary: false }));
-    if (updatedAddress) addresses.unshift(updatedAddress);
-    else if (addresses.length) addresses[0].primary = true;
-    const record = { id: customer.id || uid('c'), name: data.name.trim(), phone: data.phone.trim(), document: data.document.trim(), email: data.email.trim(), notes: data.notes.trim(), addresses, active: customer.id ? form.has('active') : true, createdAt: customer.createdAt || isoToday() };
+    const record = { id: customer.id || uid('c'), name: data.name.trim(), phone: data.phone.trim(), document: data.document.trim(), email: data.email.trim(), notes: data.notes.trim(), active: customer.id ? form.has('active') : true, createdAt: customer.createdAt || isoToday() };
     if (customer.id) {
       state.customers = state.customers.map(entry => entry.id === customer.id ? record : entry);
       state.orders.filter(order => order.customerId === customer.id).forEach(order => { order.customer = record.name; order.phone = record.phone; });
@@ -1355,42 +1337,13 @@ function customerModal(customer = {}) {
   });
 }
 
-function customerAddressMarkup(customer) {
-  const addresses = customer.addresses || [];
-  return `<div class="detail-section customer-address-section"><div class="address-section-header"><div><h3>Endereços cadastrados</h3><p>${addresses.length ? `${addresses.length} ${addresses.length === 1 ? 'endereço disponível' : 'endereços disponíveis'} para entregas e busca e leva` : 'Cadastre um endereço para entregar compras ou buscar aparelhos.'}</p></div><button type="button" class="text-button" data-action="add-customer-address" data-id="${esc(customer.id)}">＋ Adicionar</button></div>${addresses.length ? `<div class="address-list">${addresses.map(address => `<article class="address-card"><div class="address-card-icon" aria-hidden="true">⌁</div><div class="address-card-copy"><div class="address-card-title"><strong>${esc(address.label)}</strong>${address.primary ? '<span class="address-primary-badge">Principal</span>' : ''}</div><p>${esc(formatAddress(address))}</p>${address.reference ? `<small>Referência: ${esc(address.reference)}</small>` : ''}<div class="address-card-actions"><button type="button" class="text-button" data-action="edit-customer-address" data-id="${esc(customer.id)}" data-address-id="${esc(address.id)}">Editar</button>${!address.primary ? `<button type="button" class="text-button" data-action="default-customer-address" data-id="${esc(customer.id)}" data-address-id="${esc(address.id)}">Tornar principal</button>` : ''}<button type="button" class="text-button address-remove-button" data-action="remove-customer-address" data-id="${esc(customer.id)}" data-address-id="${esc(address.id)}">Remover</button></div></div></article>`).join('')}</div>` : ''}</div>`;
-}
-
-function addressModal(customer, address = {}) {
-  if (!customer) return;
-  const returnView = currentView;
-  openModal(address.id ? 'Editar endereço' : 'Novo endereço', 'ENTREGAS E BUSCA E LEVA', `<form id="address-form" class="form-grid"><div class="form-section address-form-heading"><h3>${esc(customer.name)}</h3><p>Este endereço ficará disponível para entregas de compras e serviços.</p></div>${addressFieldsMarkup(address, { required: true })}<label class="field full checkbox-field"><span><input name="primary" type="checkbox" ${address.primary || !customer.addresses.length ? 'checked' : ''}> Utilizar como endereço principal</span></label>${formActions(address.id ? 'Salvar endereço' : 'Cadastrar endereço')}</form>`);
-  document.querySelector('#address-form').addEventListener('submit', event => {
-    event.preventDefault();
-    const form = new FormData(event.target);
-    const data = Object.fromEntries(form);
-    const record = addressFromForm(data, { ...address, primary: form.has('primary') || !customer.addresses.length });
-    const error = validateAddress(record);
-    if (error) return toast(error, 'error');
-    const otherAddresses = customer.addresses.filter(item => item.id !== record.id).map(item => ({ ...item, primary: record.primary ? false : item.primary }));
-    customer.addresses = [...otherAddresses, record];
-    if (!customer.addresses.some(item => item.primary)) customer.addresses[0].primary = true;
-    if (cart.customerId === customer.id && !cart.addressId) cart.addressId = record.id;
-    recordActivity('address', `${address.id ? 'Atualizado' : 'Cadastrado'} endereço de ${customer.name}: ${record.label}`);
-    saveState();
-    closeModal();
-    if (returnView === 'sales') renderSales();
-    else viewCustomer(customer);
-    toast(address.id ? 'Endereço atualizado.' : 'Endereço cadastrado.');
-  });
-}
-
 function viewCustomer(customer) {
   if (!customer) return;
   const orders = customerOrders(customer);
   const sales = customerSales(customer);
   const total = sum(orders.filter(order => order.status !== 'cancelled'), 'value') + sum(sales.filter(sale => sale.status !== 'cancelled'), 'total');
   const digits = String(customer.phone || '').replace(/\D/g, '');
-  openModal(customer.name, 'FICHA DO CLIENTE', `<div class="customer-detail"><div class="customer-profile"><span class="customer-avatar avatar">${esc(initials(customer.name))}</span><div><strong>${esc(customer.name)}</strong><small>Cliente desde ${formatDate(customer.createdAt)}</small></div>${customer.active === false ? '<span class="status waiting">Inativo</span>' : '<span class="status ready">Ativo</span>'}</div><div class="detail-grid"><div class="field"><label>TELEFONE</label><strong>${esc(customer.phone || 'Não informado')}</strong></div><div class="field"><label>E-MAIL</label><strong>${esc(customer.email || 'Não informado')}</strong></div><div class="field"><label>CPF / CNPJ</label><strong>${esc(customer.document || 'Não informado')}</strong></div><div class="field"><label>TOTAL MOVIMENTADO</label><strong>${brl.format(total)}</strong></div></div>${customerAddressMarkup(customer)}${customer.notes ? `<div class="detail-section"><h3>Observações</h3><p>${esc(customer.notes)}</p></div>` : ''}<div class="detail-section"><h3>Últimos atendimentos</h3>${orders.length ? `<div class="activity-list">${orders.slice(0, 5).map(order => `<button class="activity-item" data-action="view-order" data-id="${esc(order.id)}"><span><strong>${esc(order.device)}</strong><small>${esc(order.id)} · ${esc(ATTENDANCE_LABELS[order.attendanceType] || ATTENDANCE_LABELS.in_store_service)}</small></span><span class="status ${statusMap[order.status]?.[1] || 'waiting'}">${esc(statusLabel(order.status))}</span></button>`).join('')}</div>` : '<p>Este cliente ainda não possui ordens de serviço.</p>'}</div><div class="form-actions">${digits ? `<a class="ghost-button" href="https://wa.me/55${esc(digits)}" target="_blank" rel="noopener noreferrer">WhatsApp ↗</a>` : ''}<button class="primary-button" data-action="edit-customer" data-id="${esc(customer.id)}">Editar cliente</button></div></div>`);
+  openModal(customer.name, 'FICHA DO CLIENTE', `<div class="customer-detail"><div class="customer-profile"><span class="customer-avatar avatar">${esc(initials(customer.name))}</span><div><strong>${esc(customer.name)}</strong><small>Cliente desde ${formatDate(customer.createdAt)}</small></div>${customer.active === false ? '<span class="status waiting">Inativo</span>' : '<span class="status ready">Ativo</span>'}</div><div class="detail-grid"><div class="field"><label>TELEFONE</label><strong>${esc(customer.phone || 'Não informado')}</strong></div><div class="field"><label>E-MAIL</label><strong>${esc(customer.email || 'Não informado')}</strong></div><div class="field"><label>CPF / CNPJ</label><strong>${esc(customer.document || 'Não informado')}</strong></div><div class="field"><label>TOTAL MOVIMENTADO</label><strong>${brl.format(total)}</strong></div></div>${customer.notes ? `<div class="detail-section"><h3>Observações</h3><p>${esc(customer.notes)}</p></div>` : ''}<div class="detail-section"><h3>Últimos atendimentos</h3>${orders.length ? `<div class="activity-list">${orders.slice(0, 5).map(order => `<button class="activity-item" data-action="view-order" data-id="${esc(order.id)}"><span><strong>${esc(order.device)}</strong><small>${esc(order.id)} · ${esc(ATTENDANCE_LABELS[order.attendanceType] || ATTENDANCE_LABELS.in_store_service)}</small></span><span class="status ${statusMap[order.status]?.[1] || 'waiting'}">${esc(statusLabel(order.status))}</span></button>`).join('')}</div>` : '<p>Este cliente ainda não possui ordens de serviço.</p>'}</div><div class="form-actions">${digits ? `<a class="ghost-button" href="https://wa.me/55${esc(digits)}" target="_blank" rel="noopener noreferrer">WhatsApp ↗</a>` : ''}<button class="primary-button" data-action="edit-customer" data-id="${esc(customer.id)}">Editar cliente</button></div></div>`);
 }
 
 function productModal(product = {}) {
@@ -1438,20 +1391,11 @@ function orderModal(order = {}) {
   const next = Math.max(1000, ...state.orders.map(item => Number(item.id.replace(/\D/g, '')) || 0)) + 1;
   const defaultDue = offsetDate(Number(state.settings.defaultDeadlineDays || 2));
   const customers = state.customers.filter(customer => customer.active !== false);
-  const selectedCustomer = customers.find(customer => customer.id === order.customerId);
-  const selectedAddress = selectedCustomer?.addresses.find(address => address.id === order.addressId) || order.deliveryAddress || primaryAddress(selectedCustomer) || {};
+  const selectedAddress = order.deliveryAddress || {};
   const pickupReturn = order.attendanceType === 'pickup_return';
-  const addressOptions = customer => `<option value="__new__">Cadastrar novo endereço</option>${(customer?.addresses || []).map(address => `<option value="${esc(address.id)}" ${selectedAddress.id === address.id ? 'selected' : ''}>${esc(address.label)} · ${esc(address.street)}, ${esc(address.number)}</option>`).join('')}`;
-  openModal(order.id ? `Editar ${order.id}` : 'Nova ordem de serviço', 'ASSISTÊNCIA TÉCNICA', `<form id="order-form" class="form-grid"><div class="field full"><label>CLIENTE CADASTRADO</label><select name="customerId" id="order-customer"><option value="">Cadastrar a partir dos dados abaixo</option>${customers.map(customer => `<option value="${esc(customer.id)}" data-name="${esc(customer.name)}" data-phone="${esc(customer.phone)}" ${order.customerId === customer.id ? 'selected' : ''}>${esc(customer.name)} · ${esc(customer.phone || 'sem telefone')}</option>`).join('')}</select></div><div class="field"><label>NOME DO CLIENTE *</label><input name="customer" id="order-customer-name" required value="${esc(order.customer)}" placeholder="Nome completo"></div><div class="field"><label>TELEFONE *</label><input name="phone" id="order-customer-phone" required value="${esc(order.phone)}" placeholder="(11) 99999-9999"></div><div class="field full"><label>TIPO DE ATENDIMENTO *</label><select name="attendanceType" id="order-attendance-type"><option value="in_store_service" ${!pickupReturn ? 'selected' : ''}>${ATTENDANCE_LABELS.in_store_service}</option><option value="pickup_return" ${pickupReturn ? 'selected' : ''}>${ATTENDANCE_LABELS.pickup_return}</option></select></div><section class="field full fulfillment-address-fields" id="order-address-section" ${pickupReturn ? '' : 'hidden'}><div class="form-section address-form-heading"><h3>Endereço da busca e devolução</h3><p>A coleta e a entrega do aparelho serão criadas automaticamente.</p></div><div class="form-grid"><div class="field full"><label>ENDEREÇO CADASTRADO</label><select name="addressId" id="order-address-select">${addressOptions(selectedCustomer)}</select></div>${addressFieldsMarkup(selectedAddress)}</div></section><div class="field"><label>APARELHO *</label><input name="device" required value="${esc(order.device)}" placeholder="Ex.: iPhone 13 Pro"></div><div class="field"><label>IMEI</label><input name="imei" inputmode="numeric" maxlength="15" value="${esc(order.imei)}" placeholder="15 dígitos"></div><div class="field full"><label>DEFEITO RELATADO *</label><textarea name="issue" required placeholder="Descreva o problema informado pelo cliente...">${esc(order.issue)}</textarea></div><div class="form-section"><h3>Serviço e prazo</h3></div><div class="field full"><label>SERVIÇO *</label><select name="serviceId" id="order-service" required><option value="">Selecione...</option>${state.services.filter(service => service.active || service.id === order.serviceId).map(service => `<option value="${esc(service.id)}" data-price="${service.price ?? ''}" ${order.serviceId === service.id ? 'selected' : ''}>${esc(service.name)} — ${service.pricing === 'fixed' ? brl.format(service.price) : 'A consultar'}</option>`).join('')}</select></div><div class="field"><label>VALOR ACORDADO (R$)</label><input name="value" id="order-value" type="number" min="0" step="0.01" value="${order.value ?? ''}" placeholder="Deixe vazio se a consultar"></div><div class="field"><label>PREVISÃO DE ENTREGA *</label><input name="dueAt" type="date" required value="${esc(order.dueAt || defaultDue)}"></div>${order.id ? `<div class="field full"><label>STATUS</label><select name="status">${Object.entries(statusMap).map(([value, [label]]) => `<option value="${value}" ${order.status === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div>` : ''}<div class="form-section"><h3>Lembrete opcional</h3></div><div class="field full"><label>LEMBRETE</label><input name="reminder" value="${esc(order.reminder)}" placeholder="Ex.: Avisar o cliente quando a peça chegar"></div><div class="field full"><label>DATA E HORA DO LEMBRETE</label><input name="reminderAt" type="datetime-local" value="${esc(order.reminderAt)}"></div>${formActions(order.id ? 'Salvar alterações' : 'Criar ordem')}</form>`);
+  openModal(order.id ? `Editar ${order.id}` : 'Nova ordem de serviço', 'ASSISTÊNCIA TÉCNICA', `<form id="order-form" class="form-grid"><div class="field full"><label>CLIENTE CADASTRADO</label><select name="customerId" id="order-customer"><option value="">Cadastrar a partir dos dados abaixo</option>${customers.map(customer => `<option value="${esc(customer.id)}" data-name="${esc(customer.name)}" data-phone="${esc(customer.phone)}" ${order.customerId === customer.id ? 'selected' : ''}>${esc(customer.name)} · ${esc(customer.phone || 'sem telefone')}</option>`).join('')}</select></div><div class="field"><label>NOME DO CLIENTE *</label><input name="customer" id="order-customer-name" required value="${esc(order.customer)}" placeholder="Nome completo"></div><div class="field"><label>TELEFONE *</label><input name="phone" id="order-customer-phone" required value="${esc(order.phone)}" placeholder="(11) 99999-9999"></div><div class="field full"><label>TIPO DE ATENDIMENTO *</label><select name="attendanceType" id="order-attendance-type"><option value="in_store_service" ${!pickupReturn ? 'selected' : ''}>${ATTENDANCE_LABELS.in_store_service}</option><option value="pickup_return" ${pickupReturn ? 'selected' : ''}>${ATTENDANCE_LABELS.pickup_return}</option></select></div><section class="field full fulfillment-address-fields" id="order-address-section" ${pickupReturn ? '' : 'hidden'}><div class="form-section address-form-heading"><h3>Endereço desta ordem de serviço</h3><p>A busca e a devolução usarão o endereço informado apenas nesta ordem.</p></div><div class="form-grid">${addressFieldsMarkup(selectedAddress)}</div></section><div class="field"><label>APARELHO *</label><input name="device" required value="${esc(order.device)}" placeholder="Ex.: iPhone 13 Pro"></div><div class="field"><label>IMEI</label><input name="imei" inputmode="numeric" maxlength="15" value="${esc(order.imei)}" placeholder="15 dígitos"></div><div class="field full"><label>DEFEITO RELATADO *</label><textarea name="issue" required placeholder="Descreva o problema informado pelo cliente...">${esc(order.issue)}</textarea></div><div class="form-section"><h3>Serviço e prazo</h3></div><div class="field full"><label>SERVIÇO *</label><select name="serviceId" id="order-service" required><option value="">Selecione...</option>${state.services.filter(service => service.active || service.id === order.serviceId).map(service => `<option value="${esc(service.id)}" data-price="${service.price ?? ''}" ${order.serviceId === service.id ? 'selected' : ''}>${esc(service.name)} — ${service.pricing === 'fixed' ? brl.format(service.price) : 'A consultar'}</option>`).join('')}</select></div><div class="field"><label>VALOR ACORDADO (R$)</label><input name="value" id="order-value" type="number" min="0" step="0.01" value="${order.value ?? ''}" placeholder="Deixe vazio se a consultar"></div><div class="field"><label>PREVISÃO DE ENTREGA *</label><input name="dueAt" type="date" required value="${esc(order.dueAt || defaultDue)}"></div>${order.id ? `<div class="field full"><label>STATUS</label><select name="status">${Object.entries(statusMap).map(([value, [label]]) => `<option value="${value}" ${order.status === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div>` : ''}<div class="form-section"><h3>Lembrete opcional</h3></div><div class="field full"><label>LEMBRETE</label><input name="reminder" value="${esc(order.reminder)}" placeholder="Ex.: Avisar o cliente quando a peça chegar"></div><div class="field full"><label>DATA E HORA DO LEMBRETE</label><input name="reminderAt" type="datetime-local" value="${esc(order.reminderAt)}"></div>${formActions(order.id ? 'Salvar alterações' : 'Criar ordem')}</form>`);
   const form = document.querySelector('#order-form');
-  const addressSelect = document.querySelector('#order-address-select');
   const attendanceSelect = document.querySelector('#order-attendance-type');
-  const fillAddress = address => {
-    for (const [name, value] of Object.entries({ addressLabel: address?.label || 'Principal', postalCode: formatPostalCode(address?.postalCode), street: address?.street || '', number: address?.number || '', complement: address?.complement || '', neighborhood: address?.neighborhood || '', city: address?.city || '', region: address?.region || '', reference: address?.reference || '' })) {
-      const input = form.querySelector(`[name="${name}"]`);
-      if (input) input.value = value;
-    }
-  };
   const toggleAddress = () => {
     const required = attendanceSelect.value === 'pickup_return';
     document.querySelector('#order-address-section').hidden = !required;
@@ -1461,10 +1405,6 @@ function orderModal(order = {}) {
     }
   };
   attendanceSelect.addEventListener('change', toggleAddress);
-  addressSelect.addEventListener('change', event => {
-    const customer = state.customers.find(item => item.id === document.querySelector('#order-customer').value);
-    fillAddress(customer?.addresses.find(address => address.id === event.target.value));
-  });
   toggleAddress();
   document.querySelector('#order-customer').addEventListener('change', event => {
     const option = event.target.selectedOptions[0];
@@ -1472,11 +1412,6 @@ function orderModal(order = {}) {
       document.querySelector('#order-customer-name').value = option.dataset.name || '';
       document.querySelector('#order-customer-phone').value = option.dataset.phone || '';
     }
-    const customer = state.customers.find(item => item.id === event.target.value);
-    addressSelect.innerHTML = addressOptions(customer);
-    const preferred = primaryAddress(customer);
-    if (preferred) addressSelect.value = preferred.id;
-    fillAddress(preferred);
   });
   document.querySelector('#order-service').addEventListener('change', event => {
     const price = event.target.selectedOptions[0]?.dataset.price;
@@ -1492,22 +1427,15 @@ function orderModal(order = {}) {
       const digits = data.phone.replace(/\D/g, '');
       customer = state.customers.find(entry => String(entry.phone || '').replace(/\D/g, '') === digits);
     }
+    const needsAddress = data.attendanceType === 'pickup_return';
+    const address = needsAddress ? addressFromForm(data, order.deliveryAddress || {}) : null;
+    if (address && validateAddress(address)) return toast(validateAddress(address), 'error');
     if (!customer) {
-      customer = { id: uid('c'), name: data.customer.trim(), phone: data.phone.trim(), email: '', document: '', notes: '', addresses: [], active: true, createdAt: isoToday() };
+      customer = { id: uid('c'), name: data.customer.trim(), phone: data.phone.trim(), email: '', document: '', notes: '', active: true, createdAt: isoToday() };
       state.customers.unshift(customer);
     }
-    const needsAddress = data.attendanceType === 'pickup_return';
-    let address = null;
-    if (needsAddress) {
-      const existingAddress = customer.addresses.find(item => item.id === data.addressId);
-      address = addressFromForm(data, { ...(existingAddress || {}), primary: existingAddress?.primary || !customer.addresses.length });
-      const error = validateAddress(address);
-      if (error) return toast(error, 'error');
-      if (existingAddress) customer.addresses = customer.addresses.map(item => item.id === address.id ? address : item);
-      else customer.addresses.push(address);
-    }
     const status = order.id ? data.status : 'analysis';
-    const record = { id: order.id || `OS-${next}`, customerId: customer.id, customer: data.customer.trim(), phone: data.phone.trim(), attendanceType: needsAddress ? 'pickup_return' : 'in_store_service', addressId: address?.id || '', deliveryAddress: address ? { ...address } : null, device: data.device.trim(), imei, issue: data.issue.trim(), serviceId: data.serviceId, value: data.value === '' ? null : Number(data.value), status, createdAt: order.createdAt || isoToday(), dueAt: data.dueAt, reminderAt: data.reminderAt, reminder: data.reminder.trim(), deliveredAt: status === 'delivered' ? order.deliveredAt || new Date().toISOString() : '' };
+    const record = { id: order.id || `OS-${next}`, customerId: customer.id, customer: data.customer.trim(), phone: data.phone.trim(), attendanceType: needsAddress ? 'pickup_return' : 'in_store_service', deliveryAddress: address ? { ...address } : null, device: data.device.trim(), imei, issue: data.issue.trim(), serviceId: data.serviceId, value: data.value === '' ? null : Number(data.value), status, createdAt: order.createdAt || isoToday(), dueAt: data.dueAt, reminderAt: data.reminderAt, reminder: data.reminder.trim(), deliveredAt: status === 'delivered' ? order.deliveredAt || new Date().toISOString() : '' };
     if (order.id) state.orders = state.orders.map(item => item.id === order.id ? record : item);
     else state.orders.unshift(record);
     syncRepairDeliveries(record, customer, address);
@@ -1892,7 +1820,7 @@ async function logout() {
     persistedStateRevision = 0;
     applicationReady = false;
     state = loadState();
-    cart = { items: [], customerId: '', payment: 'pix', discount: 0, attendanceType: 'counter_sale', addressId: '' };
+    cart = { items: [], customerId: '', payment: 'pix', discount: 0, attendanceType: 'counter_sale', deliveryAddress: null };
     currentView = 'dashboard';
     setCloudStatus('locked');
     renderCloudAccess('login');
@@ -1939,30 +1867,6 @@ document.addEventListener('click', event => {
     case 'new-customer': customerModal(); break;
     case 'edit-customer': customerModal(state.customers.find(item => item.id === id)); break;
     case 'view-customer': viewCustomer(state.customers.find(item => item.id === id)); break;
-    case 'add-customer-address': addressModal(state.customers.find(item => item.id === id)); break;
-    case 'edit-customer-address': {
-      const customer = state.customers.find(item => item.id === id);
-      addressModal(customer, customer?.addresses.find(address => address.id === button.dataset.addressId));
-      break;
-    }
-    case 'default-customer-address': {
-      const customer = state.customers.find(item => item.id === id);
-      if (!customer) break;
-      customer.addresses = customer.addresses.map(address => ({ ...address, primary: address.id === button.dataset.addressId }));
-      recordActivity('address', `Endereço principal atualizado: ${customer.name}`);
-      saveState(); viewCustomer(customer); toast('Endereço principal atualizado.');
-      break;
-    }
-    case 'remove-customer-address': {
-      const customer = state.customers.find(item => item.id === id);
-      if (!customer) break;
-      customer.addresses = customer.addresses.filter(address => address.id !== button.dataset.addressId);
-      if (customer.addresses.length && !customer.addresses.some(address => address.primary)) customer.addresses[0].primary = true;
-      if (cart.customerId === customer.id && cart.addressId === button.dataset.addressId) cart.addressId = primaryAddress(customer)?.id || '';
-      recordActivity('address', `Endereço removido: ${customer.name}`);
-      saveState(); viewCustomer(customer); toast('Endereço removido.');
-      break;
-    }
     case 'new-order': orderModal(); break;
     case 'edit-order': orderModal(state.orders.find(item => item.id === id)); break;
     case 'view-order': viewOrder(state.orders.find(item => item.id === id)); break;
@@ -1976,7 +1880,7 @@ document.addEventListener('click', event => {
     case 'add-cart-product': addCartProduct(id); break;
     case 'cart-increase': addCartProduct(id); break;
     case 'cart-decrease': addCartProduct(id, -1); break;
-    case 'clear-cart': cart = { items: [], customerId: '', payment: 'pix', discount: 0, attendanceType: 'counter_sale', addressId: '' }; renderSales(); break;
+    case 'clear-cart': cart = { items: [], customerId: '', payment: 'pix', discount: 0, attendanceType: 'counter_sale', deliveryAddress: null }; renderSales(); break;
     case 'complete-sale': completeSale(); break;
     case 'calendar-select': selectedAgendaDate = button.dataset.date; calendarMonth = new Date(`${selectedAgendaDate.slice(0, 7)}-01T12:00:00`); renderAgenda(); break;
     case 'calendar-prev': calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1); selectedAgendaDate = localDate(calendarMonth); renderAgenda(); break;
@@ -2045,10 +1949,8 @@ document.addEventListener('change', event => {
   if (event.target.matches('[data-action="sale-attendance-type"]')) { cart.attendanceType = event.target.value === 'delivery' ? 'delivery' : 'counter_sale'; renderSales(); }
   if (event.target.matches('[data-action="sale-customer"]')) {
     cart.customerId = event.target.value;
-    cart.addressId = primaryAddress(state.customers.find(customer => customer.id === cart.customerId))?.id || '';
     if (cart.attendanceType === 'delivery') renderSales();
   }
-  if (event.target.matches('[data-action="sale-address"]')) cart.addressId = event.target.value;
   if (event.target.matches('[data-action="sale-payment"]')) cart.payment = event.target.value;
   if (event.target.matches('[data-action="sale-discount"]')) { cart.discount = Math.max(0, Number(event.target.value || 0)); updateCartSummary(); }
   if (event.target.matches('[data-action="delivery-status"]')) {
@@ -2062,12 +1964,14 @@ document.addEventListener('change', event => {
 });
 
 document.addEventListener('input', event => {
-  if (event.target instanceof Element && event.target.matches('[data-action="sale-discount"]')) {
+  if (!(event.target instanceof Element)) return;
+  if (event.target.matches('[data-action="sale-discount"]')) {
     cart.discount = Math.max(0, Number(event.target.value || 0));
     updateCartSummary();
   }
-  if (event.target instanceof Element && event.target.matches('input[name="postalCode"]')) event.target.value = formatPostalCode(event.target.value);
-  if (event.target instanceof Element && event.target.matches('input[name="region"]')) event.target.value = event.target.value.replace(/[^a-z]/gi, '').slice(0, 2).toUpperCase();
+  if (event.target.matches('input[name="postalCode"]')) event.target.value = formatPostalCode(event.target.value);
+  if (event.target.matches('input[name="region"]')) event.target.value = event.target.value.replace(/[^a-z]/gi, '').slice(0, 2).toUpperCase();
+  if (event.target.matches('[data-action="sale-address-field"]')) cart.deliveryAddress = { ...(cart.deliveryAddress || {}), [event.target.name]: event.target.value };
 });
 
 document.querySelector('#menu-button')?.addEventListener('click', toggleMenu);
