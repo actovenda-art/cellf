@@ -173,6 +173,14 @@ test('a navegação principal tem nome acessível e seções identificadas', () 
   }
 });
 
+test('o rodapé do menu mantém perfil e saída sem exibir o indicador do Supabase', () => {
+  const buttons = openingTags('button');
+
+  assert.doesNotMatch(html, /class\s*=\s*["'][^"']*\bstorage-note\b/iu);
+  assert.ok(buttons.some(attributes => hasClass(attributes, 'user-card')));
+  assert.ok(buttons.some(attributes => hasClass(attributes, 'cloud-logout-button')));
+});
+
 test('os itens de menu controlam a área de conteúdo e indicam a página atual', () => {
   const navigationButtons = openingTags('button')
     .filter(attributes => hasClass(attributes, 'nav-item'));

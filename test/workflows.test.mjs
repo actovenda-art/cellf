@@ -73,6 +73,7 @@ class FakeElement {
     this.textContent = '';
     this.hidden = false;
     this.value = '';
+    this.checked = false;
     this.isConnected = true;
     this.focused = false;
   }
@@ -149,7 +150,8 @@ class FakeDocument {
       'company-document-file', 'company-document-form', 'company-cnpj',
       'company-document-count', 'company-document-list', 'company-document-status',
       'company-document-upload-button', 'company-document-dropzone',
-      'cloud-login-form', 'cloud-password', 'cloud-login-submit', 'cloud-login-status'
+      'cloud-login-form', 'cloud-password', 'cloud-login-submit', 'cloud-login-status',
+      'cloud-privacy-accept'
     ]) {
       this.elements.set('#' + id, new FakeElement(id));
     }
@@ -1133,6 +1135,7 @@ test('a tela de login mostra a identidade oficial Cellf e um formulário de senh
   assert.match(markup, /class="cloud-access-screen"/u);
   assert.match(markup, /<img\b[^>]*src="\/cellf-logo\.png"[^>]*alt="Cellf — Reparo e Comércio"/u);
   assert.match(markup, /<h1\b[^>]*id="cloud-access-title"[^>]*>Acesse sua conta<\/h1>/u);
+  assert.doesNotMatch(markup, /Entre para acessar os dados e documentos da sua empresa/iu);
   assert.match(markup, /<form\b[^>]*id="cloud-login-form"[^>]*method="post"/u);
   assert.match(markup, /<label\b[^>]*for="cloud-password"/u);
   assert.match(
@@ -1142,6 +1145,16 @@ test('a tela de login mostra a identidade oficial Cellf e um formulário de senh
   assert.match(markup, /id="cloud-login-status"[^>]*role="status"[^>]*aria-live="polite"/u);
   assert.match(markup, /id="cloud-login-submit"[^>]*type="submit"/u);
   assert.match(markup, /aria-label="Mostrar senha"/u);
+  assert.match(markup, /<details\b[^>]*class="cloud-privacy-details"/u);
+  assert.match(markup, /Privacidade e cookies/u);
+  assert.match(markup, /cookie essencial de sessão/u);
+  assert.match(markup, /Não usamos cookies de publicidade ou monitoramento/u);
+  assert.match(
+    markup,
+    /<input\b(?=[^>]*id="cloud-privacy-accept")(?=[^>]*name="privacy_consent")(?=[^>]*type="checkbox")(?=[^>]*required\b)[^>]*>/u
+  );
+  assert.match(markup, /Sessão protegida/u);
+  assert.doesNotMatch(markup, /Dados no Supabase/u);
   assert.equal(document.body.classList.contains('cloud-auth-mode'), true);
   assert.ok(document.views.every(view => view.disabled === true));
 });
@@ -1153,6 +1166,7 @@ test('login válido autentica a sessão, apaga a senha e carrega o painel remoto
   const form = document.querySelector('#cloud-login-form');
   const password = document.querySelector('#cloud-password');
   password.value = 'senha-de-teste';
+  document.querySelector('#cloud-privacy-accept').checked = true;
   let prevented = false;
 
   await form.listeners.get('submit')[0]({
@@ -1184,6 +1198,31 @@ test('login sem senha orienta o usuário sem enviar uma requisição', async () 
   assert.match(document.querySelector('#cloud-login-status').textContent, /Informe sua senha/iu);
 });
 
+test('login exige confirmação de privacidade e cookies antes de enviar a senha', async () => {
+  const { api, document, requests } = createApplication({ cloudStatus: 'locked' });
+  api.renderCloudAccess('login');
+
+  const form = document.querySelector('#cloud-login-form');
+  const consent = document.querySelector('#cloud-privacy-accept');
+  const status = document.querySelector('#cloud-login-status');
+  document.querySelector('#cloud-password').value = 'senha-de-teste';
+
+  await form.listeners.get('submit')[0]({ preventDefault() {} });
+
+  assert.equal(requests.length, 0);
+  assert.equal(consent.focused, true);
+  assert.equal(consent.getAttribute('aria-invalid'), 'true');
+  assert.equal(status.getAttribute('role'), 'alert');
+  assert.match(status.textContent, /privacidade e cookies/iu);
+
+  consent.checked = true;
+  consent.listeners.get('change')[0]();
+
+  assert.equal(consent.getAttribute('aria-invalid'), null);
+  assert.equal(status.textContent, '');
+  assert.equal(status.getAttribute('role'), 'status');
+});
+
 test('senha incorreta produz erro acessível e não deixa credenciais no formulário', async () => {
   const { api, document, requests } = createApplication({ cloudStatus: 'locked' });
   api.renderCloudAccess('login');
@@ -1192,6 +1231,7 @@ test('senha incorreta produz erro acessível e não deixa credenciais no formul�
   const password = document.querySelector('#cloud-password');
   const status = document.querySelector('#cloud-login-status');
   password.value = 'senha-incorreta';
+  document.querySelector('#cloud-privacy-accept').checked = true;
 
   await form.listeners.get('submit')[0]({ preventDefault() {} });
 

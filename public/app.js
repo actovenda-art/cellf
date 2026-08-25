@@ -183,34 +183,11 @@ function loadState(source = structuredClone(seed)) {
   }
 }
 
-function updateCloudIndicator() {
-  const indicator = document.querySelector('.storage-note');
-  const title = document.querySelector('.storage-note strong');
-  const description = document.querySelector('.storage-note small');
-  const labels = {
-    connecting: ['Conectando ao Supabase', 'Verificando acesso seguro'],
-    locked: ['Acesso protegido', 'Entre para acessar a nuvem'],
-    connected: ['Supabase conectado', 'Dados protegidos na nuvem'],
-    saving: ['Salvando no Supabase', 'Sincronização em andamento'],
-    error: ['Sincronização interrompida', 'Confira sua conexão e tente novamente'],
-    unconfigured: ['Supabase indisponível', 'Configuração necessária no servidor']
-  };
-  const [heading, detail] = labels[cloudConnection.status] || labels.error;
-  if (indicator) {
-    indicator.setAttribute('aria-label', `${heading}. ${cloudConnection.detail || detail}`);
-    indicator.setAttribute('aria-live', 'polite');
-    indicator.dataset.cloudStatus = cloudConnection.status;
-  }
-  if (title) title.textContent = heading;
-  if (description) description.textContent = cloudConnection.detail || detail;
-}
-
 function setCloudStatus(status, detail = '') {
   cloudConnection.status = status;
   cloudConnection.detail = String(detail || '');
   if (status === 'connected') cloudConnection.authenticated = true;
   if (status === 'locked' || status === 'unconfigured') cloudConnection.authenticated = false;
-  updateCloudIndicator();
   return cloudConnection;
 }
 
@@ -436,7 +413,6 @@ function syncShell() {
   if (breadcrumbBrand) breadcrumbBrand.textContent = state.settings.companyName || 'Cellf';
   if (topbarDate) topbarDate.textContent = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' }).format(new Date()).replaceAll('.', '');
   if (typeof document.title === 'string') document.title = `${state.settings.companyName || 'Cellf'} — ${state.settings.slogan || 'Reparo e Comércio'}`;
-  updateCloudIndicator();
 }
 
 function renderDashboard() {
@@ -1501,7 +1477,7 @@ function renderCloudAccess(mode = 'login', message = '') {
   const description = loading
     ? 'Estamos verificando sua sessão e buscando seus dados protegidos na nuvem.'
     : login
-      ? 'Entre para acessar os dados e documentos da sua empresa com segurança.'
+      ? ''
       : configuration
         ? 'A conexão com o Supabase e o acesso administrativo precisam ser configurados no servidor.'
         : 'Não conseguimos acessar o Supabase neste momento. Confira sua conexão e tente novamente.';
@@ -1512,20 +1488,57 @@ function renderCloudAccess(mode = 'login', message = '') {
     <div class="cloud-access-card">
       <div class="cloud-brand"><img src="/cellf-logo.png" alt="Cellf — Reparo e Comércio" width="1600" height="800"></div>
       <div class="cloud-access-body">
-        <div class="cloud-access-heading"><span class="cloud-access-kicker">ACESSO SEGURO</span><h1 id="cloud-access-title">${esc(title)}</h1><p>${esc(description)}</p></div>
+        <div class="cloud-access-heading"><span class="cloud-access-kicker">ACESSO SEGURO</span><h1 id="cloud-access-title">${esc(title)}</h1>${description ? `<p>${esc(description)}</p>` : ''}</div>
         ${login ? `<form id="cloud-login-form" class="cloud-login-form" method="post" autocomplete="on">
           <div class="cloud-account"><span class="cloud-account-avatar" aria-hidden="true">C</span><span><strong>Administrador Cellf</strong><small>Ambiente empresarial protegido</small></span><span class="cloud-account-check" aria-hidden="true">✓</span></div>
           <div class="field cloud-password-field"><label for="cloud-password">SENHA DE ACESSO</label><div class="cloud-password-control"><input id="cloud-password" name="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" aria-describedby="cloud-login-status" required><button type="button" class="cloud-password-toggle" data-action="toggle-cloud-password" aria-label="Mostrar senha" aria-pressed="false">◉</button></div></div>
+          <section class="cloud-privacy" aria-label="Privacidade e cookies">
+            <details class="cloud-privacy-details"><summary><span>Privacidade e cookies</span><span class="cloud-privacy-hint">Ver informações</span></summary>
+              <div id="cloud-privacy-information" class="cloud-privacy-information">
+                <p><strong>Dados da empresa.</strong> Cadastros e documentos ficam protegidos na nuvem e são acessados somente após sua autenticação.</p>
+                <p><strong>Cookie necessário.</strong> Utilizamos apenas um cookie essencial de sessão, protegido contra acesso por scripts, para manter sua entrada segura.</p>
+                <p><strong>Sem rastreamento.</strong> Não usamos cookies de publicidade ou monitoramento e não armazenamos seus dados no dispositivo.</p>
+              </div>
+            </details>
+            <label class="cloud-privacy-consent" for="cloud-privacy-accept"><input id="cloud-privacy-accept" name="privacy_consent" type="checkbox" aria-describedby="cloud-login-status" required><span>Li e concordo com as informações de privacidade e cookies.</span></label>
+          </section>
           <p id="cloud-login-status" class="cloud-login-status${feedback ? ' is-error' : ''}" role="${feedback ? 'alert' : 'status'}" aria-live="polite">${esc(feedback)}</p>
           <button id="cloud-login-submit" class="primary-button cloud-login-submit" type="submit"><span>Entrar no sistema</span><span aria-hidden="true">→</span></button>
         </form>` : `<div class="cloud-access-details${loading ? ' is-loading' : ''}">${loading ? '<span class="cloud-loading-spinner" aria-hidden="true"></span><span>Verificando conexão segura…</span>' : `<span aria-hidden="true">${configuration ? '⚙' : '↻'}</span><p>${esc(feedback || (configuration ? 'Configure as credenciais do Supabase, a senha administrativa e o segredo da sessão nas variáveis de ambiente do servidor.' : 'Seus dados permanecem protegidos no Supabase e serão exibidos assim que a conexão for restabelecida.'))}</p><button type="button" class="primary-button cloud-login-submit" data-action="retry-cloud">Tentar novamente</button>`}</div>`}
-        <div class="cloud-access-security"><span><span aria-hidden="true">◈</span> Sessão protegida</span><span><span aria-hidden="true">☁</span> Dados no Supabase</span></div>
+        <div class="cloud-access-security"><span><span aria-hidden="true">◈</span> Sessão protegida</span></div>
       </div>
     </div>
     <p class="cloud-access-footer">Cellf · Gestão de assistência técnica</p>
   </section>`;
 
   const form = document.querySelector('#cloud-login-form');
+  const privacyConsent = document.querySelector('#cloud-privacy-accept');
+  const reportMissingPrivacyConsent = () => {
+    const status = document.querySelector('#cloud-login-status');
+
+    if (status) {
+      status.textContent = 'Confirme as informações de privacidade e cookies para continuar.';
+      status.classList.add('is-error');
+      status.setAttribute('role', 'alert');
+    }
+
+    privacyConsent?.setAttribute('aria-invalid', 'true');
+  };
+
+  privacyConsent?.addEventListener('invalid', reportMissingPrivacyConsent);
+  privacyConsent?.addEventListener('change', () => {
+    if (!privacyConsent.checked) return;
+
+    const status = document.querySelector('#cloud-login-status');
+    privacyConsent.removeAttribute('aria-invalid');
+
+    if (status?.textContent.includes('privacidade e cookies')) {
+      status.textContent = '';
+      status.classList.remove('is-error');
+      status.setAttribute('role', 'status');
+    }
+  });
+
   form?.addEventListener('submit', async event => {
     event.preventDefault();
     const input = document.querySelector('#cloud-password');
@@ -1535,6 +1548,12 @@ function renderCloudAccess(mode = 'login', message = '') {
     if (!password) {
       if (status) { status.textContent = 'Informe sua senha para continuar.'; status.classList.add('is-error'); }
       input?.focus();
+      return;
+    }
+
+    if (!privacyConsent?.checked) {
+      reportMissingPrivacyConsent();
+      privacyConsent?.focus();
       return;
     }
 

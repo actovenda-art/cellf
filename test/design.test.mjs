@@ -156,9 +156,66 @@ test('a folha de estilos possui blocos completos e regras de aplicação', () =>
   assert.ok(rulesFor(':root').length > 0, 'Os tokens visuais precisam estar centralizados.');
 });
 
+test('o indicador visual do Supabase foi removido integralmente da interface', () => {
+  assert.doesNotMatch(application, /updateCloudIndicator|Supabase conectado|Dados protegidos na nuvem|\.storage-note/u);
+  assert.doesNotMatch(stylesheet, /\.storage-note|\.pulse\b|(?:cloud|cellf)-pulse/u);
+});
+
+test('barras de rolagem são ocultadas sem desativar a navegação dos conteúdos', () => {
+  assertProperty('*', 'scrollbar-width', /^none$/iu);
+  assertProperty('*', '-ms-overflow-style', /^none$/iu);
+  assertProperty('*::-webkit-scrollbar', 'display', /^none$/iu);
+  assertProperty('.main-nav', 'overflow-y', /auto|scroll/iu);
+  assertProperty('.main-nav', 'scrollbar-width', /^none$/iu);
+  assertProperty('.table-card', 'overflow-x', /auto|scroll/iu);
+  assertProperty('.table-card', 'scrollbar-width', /^none$/iu);
+  assertProperty('.sale-history', 'overflow-x', /auto|scroll/iu);
+  assertProperty('.sale-history', 'scrollbar-width', /^none$/iu);
+  assert.doesNotMatch(stylesheet, /scrollbar-width\s*:\s*thin\b/iu);
+});
+
 test('a cor oficial Cellf permanece no token principal da marca', () => {
   assertProperty(':root', '--accent', /^#e0f967$/iu);
   assertProperty(':root', '--accent-deep', /^#[0-9a-f]{6}$/iu);
+});
+
+test('a logo do login permanece centralizada e contida sem expandir o banner', () => {
+  assertProperty('.cloud-brand', 'grid-template-rows', /minmax\(\s*0\s*,\s*1fr\s*\)/iu);
+  assertProperty('.cloud-brand', 'overflow', /^hidden$/iu);
+  assertProperty('.cloud-brand img', 'width', /^100%$/iu);
+  assertProperty('.cloud-brand img', 'height', /^100%$/iu);
+  assertProperty('.cloud-brand img', 'min-height', /^0$/iu);
+  assertProperty('.cloud-brand img', 'object-fit', /^contain$/iu);
+  assertProperty('.cloud-brand img', 'object-position', /^center$/iu);
+});
+
+test('a confirmação de privacidade mantém contraste e controle de consentimento visível', () => {
+  assertProperty('.cloud-access-screen', 'min-width', /^0$/iu);
+  assertProperty('.cloud-login-form', 'grid-template-columns', /minmax\(\s*0\s*,\s*1fr\s*\)/iu);
+  assertProperty('.cloud-privacy', 'display', /^grid$/iu);
+  assertProperty('.cloud-privacy', 'min-width', /^0$/iu);
+  assertProperty('.cloud-privacy', 'border-radius', /\d+px/iu);
+  assertProperty('.cloud-privacy-details summary', 'display', /^flex$/iu);
+  assertProperty('.cloud-privacy-consent', 'display', /^flex$/iu);
+  assertProperty('.cloud-privacy-consent input', 'accent-color', /var\(--ink\)/iu);
+  assertProperty('.cloud-privacy-consent input[aria-invalid="true"]', 'outline', /solid/iu);
+});
+
+test('menus suspensos possuem seta própria e opções personalizadas quando suportado', () => {
+  assertProperty('select:not([multiple])', 'appearance', /^none$/iu);
+  assertProperty('select:not([multiple])', 'background-image', /data:image\/svg\+xml/iu);
+  assertProperty('select:not([multiple])', 'padding-right', /\d+px/iu);
+
+  const enhanced = blocks().find(rule => rule.selector === '@supports (appearance: base-select)')?.body;
+
+  assert.ok(enhanced, 'A personalização avançada precisa oferecer melhoria progressiva.');
+  assertProperty('select:not([multiple])', 'appearance', /^base-select$/iu, enhanced);
+  assertProperty('::picker(select)', 'appearance', /^base-select$/iu, enhanced);
+  assertProperty('::picker(select)', 'border-radius', /\d+px/iu, enhanced);
+  assertProperty('::picker(select)', 'box-shadow', /rgba\(/iu, enhanced);
+  assertProperty('select:not([multiple]) option', 'min-height', /\d+px/iu, enhanced);
+  assertProperty('select:not([multiple]) option:checked', 'background', /^#/iu, enhanced);
+  assertProperty('select:not([multiple]) option::checkmark', 'color', /^#/iu, enhanced);
 });
 
 test('a interface preserva contraste entre barra lateral escura e conteúdo claro', () => {
