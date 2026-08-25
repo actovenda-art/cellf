@@ -1,12 +1,19 @@
 {
   "version": 2,
   "builds": [
-    { "src": "api/*.mjs", "use": "@vercel/node" },
+    { "src": "api/health.mjs", "use": "@vercel/node" },
+    { "src": "api/imei.mjs", "use": "@vercel/node" },
+    { "src": "api/session.mjs", "use": "@vercel/node" },
+    { "src": "api/state.mjs", "use": "@vercel/node" },
+    { "src": "api/documents.mjs", "use": "@vercel/node" },
     { "src": "public/**", "use": "@vercel/static" }
   ],
   "routes": [
     { "src": "/api/health", "dest": "/api/health.mjs" },
     { "src": "/api/imei", "dest": "/api/imei.mjs" },
+    { "src": "/api/session", "dest": "/api/session.mjs" },
+    { "src": "/api/state", "dest": "/api/state.mjs" },
+    { "src": "/api/documents", "dest": "/api/documents.mjs" },
     { "src": "/styles.css", "dest": "/public/styles.css" },
     { "src": "/app.js", "dest": "/public/app.js" },
     { "src": "/cellf-logo.png", "dest": "/public/cellf-logo.png" },

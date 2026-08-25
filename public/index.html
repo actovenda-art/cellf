@@ -5,68 +5,138 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#e0f967">
   <meta name="application-name" content="Cellf">
-  <meta name="description" content="Cellf — Reparo e Comércio. Gestão para assistência técnica e loja de celulares.">
+  <meta name="description" content="Cellf — Reparo e Comércio. Gestão completa para assistência técnica e comércio de celulares.">
+  <meta name="color-scheme" content="light">
   <title>Cellf — Reparo e Comércio</title>
   <link rel="icon" type="image/png" href="/cellf-logo.png">
+  <link rel="preload" as="image" href="/cellf-logo.png">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
+  <a class="skip-link" href="#app-content">Pular para o conteúdo principal</a>
+
   <div class="app-shell">
-    <aside class="sidebar" id="sidebar">
-      <div class="brand">
-        <img class="brand-logo" src="/cellf-logo.png" alt="Cellf — Reparo e Comércio" width="1600" height="800">
+    <aside class="sidebar" id="sidebar" aria-label="Menu principal da Cellf">
+      <div class="sidebar-header">
+        <div class="brand">
+          <img class="brand-logo" src="/cellf-logo.png" alt="Cellf — Reparo e Comércio" width="1600" height="800">
+        </div>
+        <button class="icon-button sidebar-close" id="sidebar-close" data-action="close-menu" type="button" aria-label="Fechar menu de navegação">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12"/></svg>
+        </button>
       </div>
-      <nav class="main-nav" aria-label="Navegação principal">
-        <button class="nav-item active" data-view="dashboard"><span class="nav-icon">⌂</span><span>Visão geral</span></button>
-        <p class="nav-label">OPERAÇÃO</p>
-        <button class="nav-item" data-view="orders"><span class="nav-icon">▤</span><span>Ordens de serviço</span><em id="nav-orders-count">0</em></button>
-        <button class="nav-item" data-view="products"><span class="nav-icon">◇</span><span>Produtos & estoque</span></button>
-        <button class="nav-item" data-view="services"><span class="nav-icon">⌁</span><span>Catálogo de serviços</span></button>
-        <p class="nav-label">FINANCEIRO</p>
-        <button class="nav-item" data-view="payables"><span class="nav-icon">▱</span><span>Contas a pagar</span></button>
-        <button class="nav-item" data-view="reports"><span class="nav-icon">↗</span><span>Relatórios</span><span class="soon">EM BREVE</span></button>
+      <p class="brand-caption" id="brand-caption">Gestão de assistência técnica</p>
+
+      <nav class="main-nav" aria-label="Navegação do sistema">
+        <section class="nav-group" aria-label="Início">
+          <button class="nav-item active" data-view="dashboard" type="button" aria-current="page" aria-controls="app-content">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+            <span>Visão geral</span>
+          </button>
+        </section>
+
+        <section class="nav-group" aria-labelledby="nav-operation-label">
+          <h2 class="nav-label" id="nav-operation-label">Operação</h2>
+          <button class="nav-item" data-view="orders" type="button" aria-controls="app-content">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4m8-4v4M8 12h8m-8 4h5"/></svg>
+            <span>Ordens de serviço</span><em id="nav-orders-count" aria-label="Ordens em andamento">0</em>
+          </button>
+          <button class="nav-item" data-view="agenda" type="button" aria-controls="app-content">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18m-9 4v4m-2-2h4"/></svg>
+            <span>Agenda</span>
+          </button>
+          <button class="nav-item" data-view="customers" type="button" aria-controls="app-content">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2m16 0v-2a4 4 0 0 0-3-3.87"/><circle cx="10" cy="7" r="4"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span>Clientes</span>
+          </button>
+        </section>
+
+        <section class="nav-group" aria-labelledby="nav-catalog-label">
+          <h2 class="nav-label" id="nav-catalog-label">Catálogo</h2>
+          <button class="nav-item" data-view="products" type="button" aria-controls="app-content">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Zm0 9 8-4.5M12 12 4 7.5m8 4.5v9"/></svg>
+            <span>Produtos e estoque</span>
+          </button>
+          <button class="nav-item" data-view="services" type="button" aria-controls="app-content">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.32 5.32L4 17v3h3l5.38-5.38A4 4 0 0 0 17.7 9.3l-2.9 2.9-3-3 2.9-2.9Z"/><path d="m17 17 3 3m-2-8 2-2"/></svg>
+            <span>Serviços</span>
+          </button>
+        </section>
+
+        <section class="nav-group" aria-labelledby="nav-finance-label">
+          <h2 class="nav-label" id="nav-finance-label">Financeiro</h2>
+          <button class="nav-item" data-view="sales" type="button" aria-controls="app-content">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3h2l2 12h11l3-8H6"/><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></svg>
+            <span>Vendas</span>
+          </button>
+          <button class="nav-item" data-view="payables" type="button" aria-controls="app-content">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18m-14 5h4"/></svg>
+            <span>Contas a pagar</span>
+          </button>
+          <button class="nav-item" data-view="reports" type="button" aria-controls="app-content">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18M8 15l4-4 3 3 6-7"/><path d="M16 7h5v5"/></svg>
+            <span>Relatórios</span>
+          </button>
+        </section>
+
+        <section class="nav-group" aria-labelledby="nav-management-label">
+          <h2 class="nav-label" id="nav-management-label">Gestão</h2>
+          <button class="nav-item" data-view="settings" type="button" aria-controls="app-content">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v8m-4-4h8"/><circle cx="12" cy="12" r="9"/></svg>
+            <span>Configurações</span>
+          </button>
+        </section>
       </nav>
+
       <div class="sidebar-bottom">
-        <div class="storage-note"><span class="pulse"></span><div><strong>Modo local</strong><small>Dados salvos neste navegador</small></div></div>
-        <button class="user-card" data-action="profile"><span class="avatar">MA</span><span><strong>Marcos Almeida</strong><small>Administrador</small></span><span>•••</span></button>
+        <div class="storage-note" aria-label="Conexão segura com o Supabase" aria-live="polite"><span class="pulse" aria-hidden="true"></span><div><strong>Conectando ao Supabase</strong><small>Dados protegidos na nuvem</small></div></div>
+        <button class="user-card" data-action="profile" data-view="settings" type="button" aria-label="Abrir configurações do perfil"><span class="avatar" aria-hidden="true">CF</span><span><strong id="profile-name">Equipe Cellf</strong><small id="profile-role">Administrador</small></span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button>
+        <button class="cloud-logout-button" data-action="logout" type="button" aria-label="Encerrar sessão segura"><span aria-hidden="true">↪</span><span>Sair da conta</span></button>
       </div>
     </aside>
 
-    <main class="main-area">
+    <button class="sidebar-backdrop" id="sidebar-backdrop" data-action="close-menu" type="button" aria-label="Fechar menu de navegação" tabindex="-1" hidden></button>
+
+    <main class="main-area" id="main-area">
       <header class="topbar">
-        <button class="icon-button menu-button" id="menu-button" aria-label="Abrir menu">☰</button>
-        <div class="breadcrumb"><span>Cellf</span><b>/</b><strong id="current-view-label">Visão geral</strong></div>
-        <div class="top-actions">
-          <button class="search-button" id="global-search"><span>⌕</span><span>Buscar no sistema</span><kbd>Ctrl K</kbd></button>
-          <button class="icon-button notification-button" id="notifications-button" aria-label="Lembretes"><span>♢</span><i id="notification-dot"></i></button>
-          <button class="primary-button compact" data-action="new-order"><span>＋</span> Nova ordem</button>
+        <div class="topbar-left">
+          <button class="icon-button menu-button" id="menu-button" type="button" aria-label="Abrir menu de navegação" aria-controls="sidebar" aria-expanded="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+          <span class="mobile-brand" aria-hidden="true">Cellf</span>
+          <nav class="breadcrumb" aria-label="Localização atual"><span>Cellf</span><b aria-hidden="true">/</b><strong id="current-view-label" aria-current="page">Visão geral</strong></nav>
+        </div>
+        <div class="top-actions" aria-label="Ações rápidas">
+          <button class="search-button" id="global-search" type="button" aria-label="Buscar no sistema, atalho Control K" aria-keyshortcuts="Control+K Meta+K" aria-haspopup="dialog" aria-controls="command-backdrop"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg><span>Buscar no sistema</span><kbd aria-hidden="true">Ctrl K</kbd></button>
+          <span class="topbar-divider" aria-hidden="true"></span>
+          <button class="icon-button notification-button" id="notifications-button" type="button" aria-label="Abrir central de lembretes" aria-controls="notification-drawer" aria-haspopup="dialog"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 12h4"/></svg><i id="notification-dot" aria-hidden="true"></i></button>
+          <button class="primary-button compact topbar-cta" data-action="new-order" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14m-7-7h14"/></svg><span>Nova ordem</span></button>
         </div>
       </header>
 
-      <section class="content" id="app-content" aria-live="polite"></section>
+      <section class="content" id="app-content" tabindex="-1" aria-label="Conteúdo da página" aria-live="polite"></section>
     </main>
   </div>
 
   <div class="modal-backdrop" id="modal-backdrop" hidden>
-    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-      <header><div><p class="eyebrow" id="modal-eyebrow">NOVO REGISTRO</p><h2 id="modal-title">Cadastro</h2></div><button class="icon-button" data-action="close-modal" aria-label="Fechar">×</button></header>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-eyebrow">
+      <header><div><p class="eyebrow" id="modal-eyebrow">Novo registro</p><h2 id="modal-title">Cadastro</h2></div><button class="icon-button" data-action="close-modal" type="button" aria-label="Fechar janela"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12"/></svg></button></header>
       <div class="modal-body" id="modal-body"></div>
     </section>
   </div>
 
   <div class="command-backdrop" id="command-backdrop" hidden>
-    <section class="command-palette" role="dialog" aria-modal="true" aria-label="Busca global">
-      <div class="command-input"><span>⌕</span><input id="command-query" placeholder="Busque por cliente, IMEI, produto ou ordem..." autocomplete="off"><kbd>ESC</kbd></div>
-      <div id="command-results" class="command-results"></div>
+    <section class="command-palette" role="dialog" aria-modal="true" aria-label="Busca global no sistema">
+      <div class="command-input"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg><label class="sr-only" for="command-query">Pesquisar clientes, ordens, produtos ou serviços</label><input id="command-query" type="search" placeholder="Busque por cliente, IMEI, produto ou ordem..." autocomplete="off" spellcheck="false"><kbd aria-hidden="true">ESC</kbd></div>
+      <div id="command-results" class="command-results" aria-live="polite"></div>
     </section>
   </div>
 
-  <aside class="notification-drawer" id="notification-drawer" aria-hidden="true">
-    <header><div><p class="eyebrow">CENTRAL</p><h2>Lembretes</h2></div><button class="icon-button" data-action="close-notifications">×</button></header>
+  <aside class="notification-drawer" id="notification-drawer" role="dialog" aria-label="Central de lembretes" aria-hidden="true">
+    <header><div><p class="eyebrow">Central</p><h2>Lembretes</h2></div><button class="icon-button" data-action="close-notifications" type="button" aria-label="Fechar central de lembretes"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12"/></svg></button></header>
     <div id="notification-list"></div>
   </aside>
 
-  <div class="toast-region" id="toast-region" aria-live="polite"></div>
+  <div class="toast-region" id="toast-region" role="status" aria-live="polite" aria-atomic="false"></div>
+  <noscript>Para utilizar o sistema Cellf, ative o JavaScript no seu navegador.</noscript>
   <script type="module" src="/app.js"></script>
 </body>
 </html>
