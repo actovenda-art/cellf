@@ -20,14 +20,14 @@ const exposedApplication = application.slice(0, bootstrap) + '\n' + [
   '  loadState, saveState, flushStateSave, loadRemoteState, apiRequest,',
   '  setCloudStatus, renderCloudAccess, authenticate, bootstrapApplication, logout,',
   '  esc, normalize, initials, sum,',
-  '  formatPostalCode, normalizeAddress, normalizeCustomerAddresses, primaryAddress, formatAddress, validateAddress,',
+  '  formatPostalCode, normalizeAddress, removeCustomerAddressData, formatAddress, validateAddress,',
   '  localDate, offsetDate, formatDate, formatDateTime,',
   '  formatCnpj, isValidCnpj, formatFileSize, validateCompanyDocument,',
   '  companyDocumentStorageAvailable,',
   '  saveCompanyDocument, readCompanyDocument, deleteCompanyDocument,',
   '  renderCompanyDocuments, handleCompanyDocumentUpload,',
   '  downloadCompanyDocument, removeCompanyDocument,',
-  '  customerOrders, customerSales, customerDeliveries, createDeliveryRecord, syncRepairDeliveries, completeOrderDeliveries, recordActivity,',
+  '  customerOrders, customerSales, createDeliveryRecord, syncRepairDeliveries, completeOrderDeliveries, recordActivity,',
   '  cartSubtotal, cartTotal, addCartProduct, completeSale,',
   '  agendaEvents, withinPeriod, reportData, renderSales, renderDeliveries, renderReports,',
   '  commandSearch, refreshBadges, syncShell, toggleMenu, closeMenu, navigate',
@@ -405,36 +405,47 @@ test('dados recebidos da nuvem são normalizados sem duplicar telefones equivale
   }
 });
 
-test('cadastros antigos recebem modalidades padrão e endereços estruturados sem perder dados', () => {
+test('cadastros antigos removem endereços do cliente e preservam os endereços dos pedidos', () => {
+  const orderAddress = { postalCode: '01310-100', street: 'Rua das Flores', number: '12', neighborhood: 'Centro', city: 'São Paulo', region: 'SP' };
+  const saleAddress = { postalCode: '04538-132', street: 'Rua Funchal', number: '418', neighborhood: 'Vila Olímpia', city: 'São Paulo', region: 'SP' };
   const legacy = fixture({
-    customers: [{ id: 'cliente-legado', name: 'Pessoa Legada', phone: '11977770000', address: 'Rua das Flores', city: 'São Paulo', postalCode: '01310100' }],
-    orders: [{ id: 'OS-LEGADA', customerId: 'cliente-legado', customer: 'Pessoa Legada', phone: '11977770000', createdAt: dateOffset() }],
-    sales: [{ id: 'v-legada', customerId: 'cliente-legado', customer: 'Pessoa Legada', items: [], total: 0 }]
+    customers: [{ id: 'cliente-legado', name: 'Pessoa Legada', phone: '11977770000', address: 'Rua das Flores', city: 'São Paulo', postalCode: '01310100', addresses: [orderAddress] }],
+    orders: [
+      { id: 'OS-LEGADA', customerId: 'cliente-legado', customer: 'Pessoa Legada', phone: '11977770000', createdAt: dateOffset() },
+      { id: 'OS-BUSCA', customerId: 'cliente-legado', customer: 'Pessoa Legada', phone: '11977770000', attendanceType: 'pickup_return', deliveryAddress: orderAddress, createdAt: dateOffset() }
+    ],
+    sales: [
+      { id: 'v-legada', customerId: 'cliente-legado', customer: 'Pessoa Legada', items: [], total: 0 },
+      { id: 'v-entrega', customerId: 'cliente-legado', customer: 'Pessoa Legada', attendanceType: 'delivery', deliveryAddress: saleAddress, items: [], total: 0 }
+    ]
   });
   delete legacy.deliveries;
 
   const { api } = createApplication({ stored: legacy });
-  const address = api.state.customers[0].addresses[0];
+  const customer = api.state.customers[0];
 
   assert.equal(api.state.orders[0].attendanceType, 'in_store_service');
   assert.equal(api.state.sales[0].attendanceType, 'counter_sale');
-  assert.equal(address.street, 'Rua das Flores');
-  assert.equal(address.postalCode, '01310-100');
-  assert.equal(address.primary, true);
+  assert.equal(customer.address, undefined);
+  assert.equal(customer.addresses, undefined);
+  assert.equal(customer.city, undefined);
+  assert.equal(customer.postalCode, undefined);
+  assert.equal(api.state.orders[1].deliveryAddress.street, 'Rua das Flores');
+  assert.equal(api.state.sales[1].deliveryAddress.street, 'Rua Funchal');
   assert.deepEqual(plain(api.state.deliveries), []);
 });
 
-test('endereços brasileiros são formatados, validados e identificam um endereço principal', () => {
+test('endereços brasileiros dos pedidos são formatados e validados individualmente', () => {
   const { api } = createApplication();
-  const address = api.normalizeAddress({ id: 'end-casa', label: 'Casa', postalCode: '01310100', street: 'Avenida Paulista', number: '1578', complement: 'Sala 4', neighborhood: 'Bela Vista', city: 'São Paulo', region: 'sp', reference: 'Ao lado do metrô', primary: true });
+  const address = api.normalizeAddress({ postalCode: '01310100', street: 'Avenida Paulista', number: '1578', complement: 'Sala 4', neighborhood: 'Bela Vista', city: 'São Paulo', region: 'sp', reference: 'Ao lado do metrô' });
 
   assert.equal(api.formatPostalCode('01310-100'), '01310-100');
+  assert.equal(address.label, 'Endereço do pedido');
   assert.equal(address.region, 'SP');
   assert.equal(api.validateAddress(address), '');
   assert.match(api.formatAddress(address), /Avenida Paulista, 1578/u);
   assert.match(api.formatAddress(address), /Bela Vista · São Paulo \/ SP/u);
   assert.match(api.formatAddress(address), /CEP 01310-100/u);
-  assert.equal(api.primaryAddress({ addresses: [address] }).id, 'end-casa');
   assert.match(api.validateAddress({ ...address, postalCode: '01310' }), /CEP válido/u);
   assert.match(api.validateAddress({ ...address, region: 'S' }), /UF/u);
 });
@@ -616,18 +627,17 @@ test('vendas sem cliente vinculado são registradas como atendimento de balcão'
   assert.equal(api.state.deliveries.length, 0);
 });
 
-test('venda para entrega exige endereço, cria a rota e salva cliente, compra e logística na nuvem', async () => {
-  const address = { id: 'end-entrega', label: 'Casa', postalCode: '01310-100', street: 'Avenida Paulista', number: '1578', complement: 'Sala 4', neighborhood: 'Bela Vista', city: 'São Paulo', region: 'SP', reference: 'Portaria principal', primary: true };
-  const stored = fixture({ customers: [{ ...fixture().customers[0], addresses: [address] }] });
-  const { api, remoteState, document } = createApplication({ stored });
+test('venda para entrega salva o endereço apenas no pedido e na logística da nuvem', async () => {
+  const address = { postalCode: '01310-100', street: 'Avenida Paulista', number: '1578', complement: 'Sala 4', neighborhood: 'Bela Vista', city: 'São Paulo', region: 'SP', reference: 'Portaria principal' };
+  const { api, remoteState, document } = createApplication();
 
   api.addCartProduct('produto-capa');
   api.cart.attendanceType = 'delivery';
   api.cart.customerId = 'cliente-teste';
-  api.cart.addressId = 'end-entrega';
+  api.cart.deliveryAddress = address;
   api.renderSales();
 
-  assert.match(document.querySelector('#app-content').innerHTML, /ENDEREÇO DE ENTREGA/u);
+  assert.match(document.querySelector('#app-content').innerHTML, /Endereço deste pedido/u);
   assert.match(document.querySelector('#app-content').innerHTML, /Avenida Paulista/u);
 
   api.completeSale();
@@ -637,7 +647,7 @@ test('venda para entrega exige endereço, cria a rota e salva cliente, compra e 
   const delivery = api.state.deliveries[0];
 
   assert.equal(sale.attendanceType, 'delivery');
-  assert.equal(sale.deliveryAddress.id, 'end-entrega');
+  assert.equal(sale.deliveryAddress.street, 'Avenida Paulista');
   assert.equal(delivery.kind, 'sale_delivery');
   assert.equal(delivery.sourceType, 'sale');
   assert.equal(delivery.sourceId, sale.id);
@@ -646,8 +656,13 @@ test('venda para entrega exige endereço, cria a rota e salva cliente, compra e 
   assert.equal(delivery.status, 'scheduled');
   assert.equal(remoteState.value.sales[0].attendanceType, 'delivery');
   assert.equal(remoteState.value.deliveries[0].address.postalCode, '01310-100');
+  assert.equal(api.state.customers[0].addresses, undefined);
+  assert.equal(api.state.customers[0].address, undefined);
+  assert.equal(remoteState.value.customers[0].addresses, undefined);
+  assert.equal(remoteState.value.customers[0].address, undefined);
   assert.equal(document.querySelector('#nav-deliveries-count').textContent, 1);
   assert.equal(api.cart.attendanceType, 'counter_sale');
+  assert.equal(api.cart.deliveryAddress, null);
 });
 
 test('entrega sem cliente ou sem endereço não baixa estoque nem cria vendas', () => {
@@ -666,7 +681,7 @@ test('entrega sem cliente ou sem endereço não baixa estoque nem cria vendas', 
 
   assert.equal(api.state.sales.length, 0);
   assert.equal(api.state.deliveries.length, 0);
-  assert.match(messages().at(-1).textContent, /Cadastre um endereço/u);
+  assert.match(messages().at(-1).textContent, /Informe o endereço de entrega diretamente neste pedido/u);
 });
 
 test('busca e leva cria coleta e devolução sem duplicar movimentações ao editar a ordem', () => {
