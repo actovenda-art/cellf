@@ -1,5 +1,3 @@
-const STORAGE_KEY = 'cellf-state-v1';
-const LEGACY_STORAGE_KEY = 'nexo-mobile-state-v1';
 const PAYMENT_LABELS = { pix: 'Pix', debit: 'Cartão de débito', credit: 'Cartão de crédito', cash: 'Dinheiro', transfer: 'Transferência' };
 const APPOINTMENT_LABELS = { repair: 'Reparo', delivery: 'Entrega', consultation: 'Atendimento', reminder: 'Lembrete', meeting: 'Reunião' };
 const ATTENDANCE_LABELS = { delivery: 'Entrega', pickup_return: 'Serviço Busca e Leva', counter_sale: 'Venda balcão', in_store_service: 'Serviço em loja' };
@@ -135,10 +133,7 @@ function loadState(source = null) {
   try {
     const storedSource = source && typeof source === 'object' && !Array.isArray(source)
       ? source
-      : (() => {
-          const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
-          return saved ? JSON.parse(saved) : fallback;
-        })();
+      : fallback;
 
     const stored = storedSource && typeof storedSource === 'object' && !Array.isArray(storedSource) ? storedSource : fallback;
     const migrated = {
