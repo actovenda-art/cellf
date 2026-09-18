@@ -2,6 +2,9 @@ import http from 'node:http';
 import { readFileSync, existsSync, createReadStream, statSync } from 'node:fs';
 import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import sessionHandler from './api/session.mjs';
+import stateHandler from './api/state.mjs';
+import documentsHandler from './api/documents.mjs';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const publicDir = join(root, 'public');
@@ -109,13 +112,17 @@ function serveStatic(req, res) {
 }
 
 const server = http.createServer(async (req, res) => {
-  if (req.method === 'GET' && req.url === '/api/health') return json(res, 200, { ok: true, imeiConfigured: Boolean(process.env.INFOSIMPLES_TOKEN) });
-  if (req.method === 'POST' && req.url === '/api/imei') return consultImei(req, res);
-  if (req.url.startsWith('/api/')) return json(res, 404, { message: 'Rota não encontrada.' });
+  const pathname = new URL(req.url || '/', 'http://localhost').pathname;
+  if (req.method === 'GET' && pathname === '/api/health') return json(res, 200, { ok: true, imeiConfigured: Boolean(process.env.INFOSIMPLES_TOKEN) });
+  if (req.method === 'POST' && pathname === '/api/imei') return consultImei(req, res);
+  if (pathname === '/api/session') return sessionHandler(req, res);
+  if (pathname === '/api/state') return stateHandler(req, res);
+  if (pathname === '/api/documents') return documentsHandler(req, res);
+  if (pathname.startsWith('/api/')) return json(res, 404, { message: 'Rota não encontrada.' });
   if (req.method !== 'GET' && req.method !== 'HEAD') return json(res, 405, { message: 'Método não permitido.' });
   return serveStatic(req, res);
 });
 
 server.listen(port, '127.0.0.1', () => {
-  console.log(`Gestão Celular rodando em http://localhost:${port}`);
+  console.log(`Cellf — Reparo e Comércio rodando em http://localhost:${port}`);
 });
