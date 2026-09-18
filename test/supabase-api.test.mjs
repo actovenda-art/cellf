@@ -6,6 +6,7 @@ import sessionHandler from '../api/session.mjs';
 import stateHandler from '../api/state.mjs';
 import {
   getSupabaseConfig,
+  hashPassword,
   isAuthConfigured,
   isSupabaseConfigured,
   issueSession,
@@ -15,7 +16,7 @@ import {
   SESSION_COOKIE_NAME,
   SESSION_DURATION_SECONDS,
   supabaseRequest,
-  verifyPassword
+  verifyCredentials
 } from '../api/supabase.mjs';
 
 const VARIABLES = [
@@ -24,7 +25,9 @@ const VARIABLES = [
   'SUPABASE_SERVICE_ROLE_KEY',
   'SUPABASE_STATE_ID',
   'SUPABASE_DOCUMENT_BUCKET',
+  'CELLF_ADMIN_EMAIL',
   'CELLF_APP_PASSWORD',
+  'CELLF_APP_PASSWORD_HASH',
   'CELLF_AUTH_SECRET',
   'VERCEL'
 ];
@@ -37,7 +40,9 @@ function configured(context, overrides = {}) {
     SUPABASE_SERVICE_ROLE_KEY: undefined,
     SUPABASE_STATE_ID: undefined,
     SUPABASE_DOCUMENT_BUCKET: undefined,
+    CELLF_ADMIN_EMAIL: 'admin@cellf.example',
     CELLF_APP_PASSWORD: 'senha-exclusiva-dos-testes',
+    CELLF_APP_PASSWORD_HASH: undefined,
     CELLF_AUTH_SECRET: 'segredo-falso-de-autenticacao-com-mais-de-trinta-e-dois-caracteres',
     VERCEL: undefined,
     ...overrides
@@ -113,16 +118,28 @@ function fakeFetch(context, implementation) {
   return calls;
 }
 
-test('a autenticação exige senha e segredo com pelo menos 32 caracteres', context => {
+test('a autenticação exige e-mail, senha e segredo com pelo menos 32 caracteres', context => {
   configured(context);
   assert.equal(isAuthConfigured(), true);
-  assert.equal(verifyPassword('senha-exclusiva-dos-testes'), true);
-  assert.equal(verifyPassword('senha-incorreta'), false);
-  assert.equal(verifyPassword('x'.repeat(1025)), false);
+  assert.equal(verifyCredentials('ADMIN@CELLF.EXAMPLE', 'senha-exclusiva-dos-testes'), true);
+  assert.equal(verifyCredentials('outro@cellf.example', 'senha-exclusiva-dos-testes'), false);
+  assert.equal(verifyCredentials('admin@cellf.example', 'senha-incorreta'), false);
+  assert.equal(verifyCredentials('admin@cellf.example', 'x'.repeat(1025)), false);
 
   process.env.CELLF_AUTH_SECRET = 'curto';
   assert.equal(isAuthConfigured(), false);
-  assert.equal(verifyPassword('senha-exclusiva-dos-testes'), false);
+  assert.equal(verifyCredentials('admin@cellf.example', 'senha-exclusiva-dos-testes'), false);
+});
+
+test('a senha pode ser armazenada como hash scrypt com salt', context => {
+  configured(context, {
+    CELLF_APP_PASSWORD: undefined,
+    CELLF_APP_PASSWORD_HASH: hashPassword('senha-forte-dos-testes', 'saltsegurodetestes123456')
+  });
+
+  assert.equal(isAuthConfigured(), true);
+  assert.equal(verifyCredentials('admin@cellf.example', 'senha-forte-dos-testes'), true);
+  assert.equal(verifyCredentials('admin@cellf.example', 'senha-incorreta'), false);
 });
 
 test('login sem configuração de segurança falha de forma fechada', async context => {
@@ -132,7 +149,7 @@ test('login sem configuração de segurança falha de forma fechada', async cont
   await sessionHandler({
     method: 'POST',
     headers: { host: 'cellf.example.test' },
-    body: { password: 'qualquer-senha' }
+    body: { email: 'admin@cellf.example', password: 'qualquer-senha' }
   }, response);
 
   assert.equal(response.statusCode, 503);
@@ -146,7 +163,7 @@ test('login inválido não emite sessão nem expõe a senha configurada', async 
 
   await sessionHandler(request('POST', {
     authenticated: false,
-    body: { password: 'senha-incorreta' }
+    body: { email: 'admin@cellf.example', password: 'senha-incorreta' }
   }), response);
 
   assert.equal(response.statusCode, 401);
@@ -161,12 +178,13 @@ test('login válido cria cookie assinado HttpOnly com SameSite Strict e expiraç
 
   await sessionHandler(request('POST', {
     authenticated: false,
-    body: { password: 'senha-exclusiva-dos-testes' }
+    body: { email: 'admin@cellf.example', password: 'senha-exclusiva-dos-testes' }
   }), response);
 
   const cookie = response.headers['Set-Cookie'];
   assert.equal(response.statusCode, 200);
   assert.equal(response.payload.authenticated, true);
+  assert.equal(response.payload.email, 'admin@cellf.example');
   assert.ok(!Number.isNaN(Date.parse(response.payload.expiresAt)));
   assert.match(cookie, /^cellf_session=[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+;/u);
   assert.match(cookie, /;\s*Path=\/api\b/u);
@@ -191,7 +209,7 @@ test('cookies de sessão recebem Secure em HTTPS e em publicações Vercel', asy
     await sessionHandler(request('POST', {
       authenticated: false,
       headers,
-      body: { password: 'senha-exclusiva-dos-testes' }
+      body: { email: 'admin@cellf.example', password: 'senha-exclusiva-dos-testes' }
     }), response);
 
     assert.match(response.headers['Set-Cookie'], /;\s*Secure\b/u);
@@ -255,7 +273,7 @@ test('login, dados e documentos rejeitam alterações vindas de outra origem', a
     [sessionHandler, request('POST', {
       authenticated: false,
       headers: { origin: 'https://intruso.example.test' },
-      body: { password: 'senha-exclusiva-dos-testes' }
+      body: { email: 'admin@cellf.example', password: 'senha-exclusiva-dos-testes' }
     })],
     [stateHandler, request('PUT', {
       headers: { origin: 'https://intruso.example.test' },

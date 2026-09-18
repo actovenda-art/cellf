@@ -69,7 +69,9 @@ test('o frontend não contém chaves privilegiadas, tokens embutidos ou armazena
   for (const pattern of [
     /\bSUPABASE_SECRET_KEY\b/u,
     /\bSUPABASE_SERVICE_ROLE_KEY\b/u,
+    /\bCELLF_ADMIN_EMAIL\b/u,
     /\bCELLF_APP_PASSWORD\b/u,
+    /\bCELLF_APP_PASSWORD_HASH\b/u,
     /\bCELLF_AUTH_SECRET\b/u,
     /\bsb_secret_[A-Za-z0-9_-]+/u,
     /\blocalStorage\b|\bsessionStorage\b|\bindexedDB\b/iu
@@ -84,7 +86,9 @@ test('a documentação explica as variáveis privadas, RLS e a sessão HttpOnly'
     'SUPABASE_URL',
     'SUPABASE_SECRET_KEY',
     'SUPABASE_SERVICE_ROLE_KEY',
+    'CELLF_ADMIN_EMAIL',
     'CELLF_APP_PASSWORD',
+    'CELLF_APP_PASSWORD_HASH',
     'CELLF_AUTH_SECRET'
   ]) {
     assert.ok(readme.includes(variable), 'A documentação precisa explicar ' + variable + '.');

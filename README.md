@@ -46,16 +46,17 @@ Os testes verificam também a autenticação, a persistência remota, as políti
 2. Copie `.env.example` para `.env` e configure as variáveis:
    - `SUPABASE_URL`: endereço do projeto, como `https://seu-projeto.supabase.co`.
    - `SUPABASE_SECRET_KEY`: chave secreta do Supabase, usada exclusivamente no servidor. A variável `SUPABASE_SERVICE_ROLE_KEY` também é aceita para projetos que ainda utilizam a chave legada.
-   - `CELLF_APP_PASSWORD`: senha exigida para entrar na aplicação.
+   - `CELLF_ADMIN_EMAIL`: e-mail exigido para entrar na aplicação.
+   - `CELLF_APP_PASSWORD_HASH`: hash `scrypt` com salt da senha; a senha original nunca precisa ficar no repositório. `CELLF_APP_PASSWORD` continua aceito somente para compatibilidade com instalações antigas.
    - `CELLF_AUTH_SECRET`: segredo longo e aleatório usado para assinar a sessão.
 3. Opcionalmente, personalize `SUPABASE_STATE_ID` e `SUPABASE_DOCUMENT_BUCKET` se precisar separar ambientes ou alterar o nome do bucket.
-4. Reinicie o servidor e faça login com a senha configurada.
+4. Reinicie o servidor e faça login com o e-mail e a senha configurados.
 
 O navegador conversa apenas com as rotas `/api/session`, `/api/state` e `/api/documents`; a chave privilegiada permanece no servidor. A sessão é protegida por um cookie assinado `HttpOnly`, e os documentos são enviados e baixados por URLs assinadas com validade limitada.
 
 ### Publicação na Vercel
 
-Cadastre as mesmas variáveis de ambiente nas configurações do projeto na Vercel e publique novamente. Nunca coloque `SUPABASE_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `CELLF_APP_PASSWORD` ou `CELLF_AUTH_SECRET` em arquivos públicos, no JavaScript do navegador ou no repositório.
+Cadastre as mesmas variáveis de ambiente nas configurações do projeto na Vercel e publique novamente. Nunca coloque `SUPABASE_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `CELLF_APP_PASSWORD`, `CELLF_APP_PASSWORD_HASH` ou `CELLF_AUTH_SECRET` em arquivos públicos, no JavaScript do navegador ou no repositório.
 
 ## Configurar a consulta de IMEI
 

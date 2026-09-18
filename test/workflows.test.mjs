@@ -151,7 +151,7 @@ class FakeDocument {
       'company-document-file', 'company-document-form', 'company-cnpj',
       'company-document-count', 'company-document-list', 'company-document-status',
       'company-document-upload-button', 'company-document-dropzone',
-      'cloud-login-form', 'cloud-password', 'cloud-login-submit', 'cloud-login-status',
+      'cloud-login-form', 'cloud-email', 'cloud-password', 'cloud-login-submit', 'cloud-login-status',
       'cloud-privacy-accept'
     ]) {
       this.elements.set('#' + id, new FakeElement(id));
@@ -280,7 +280,7 @@ function createApplication(options = {}) {
     }
 
     if (target === '/api/session' && method === 'POST') {
-      return body.password === 'senha-de-teste'
+      return body.email === 'admin@cellf.example' && body.password === 'senha-de-teste'
         ? response(200, { authenticated: true })
         : response(401, { code: 'INVALID_CREDENTIALS', message: 'Senha incorreta.' });
     }
@@ -1273,28 +1273,34 @@ test('carregar o estado remoto busca as informações compartilhadas pelo Supaba
   assert.ok(requests.some(request => request.url === '/api/state' && request.method === 'GET'));
 });
 
-test('a autenticação envia a senha somente ao endpoint de sessão', async () => {
+test('a autenticação envia e-mail e senha somente ao endpoint de sessão', async () => {
   const { api, requests } = createApplication({ cloudStatus: 'locked' });
 
-  await api.authenticate('senha-de-teste');
+  await api.authenticate('Admin@Cellf.Example', 'senha-de-teste');
 
   const login = requests.find(request => request.url === '/api/session');
   assert.ok(login);
   assert.equal(login.method, 'POST');
+  assert.equal(login.body.email, 'admin@cellf.example');
   assert.equal(login.body.password, 'senha-de-teste');
 });
 
-test('a tela de login mostra a identidade oficial Cellf e um formulário de senha acessível', () => {
+test('a tela de login mostra a identidade oficial Cellf e um formulário de e-mail e senha acessível', () => {
   const { api, document } = createApplication({ cloudStatus: 'locked' });
 
   api.renderCloudAccess('login');
 
   const markup = document.querySelector('#app-content').innerHTML;
   assert.match(markup, /class="cloud-access-screen"/u);
-  assert.match(markup, /<img\b[^>]*src="\/cellf-logo\.png"[^>]*alt="Cellf — Reparo e Comércio"/u);
+  assert.match(markup, /<img\b[^>]*src="\/cellf-logo-updated\.png"[^>]*alt="Cellf — Reparo e Comércio"/u);
   assert.match(markup, /<h1\b[^>]*id="cloud-access-title"[^>]*>Acesse sua conta<\/h1>/u);
   assert.doesNotMatch(markup, /Entre para acessar os dados e documentos da sua empresa/iu);
   assert.match(markup, /<form\b[^>]*id="cloud-login-form"[^>]*method="post"/u);
+  assert.match(markup, /<label\b[^>]*for="cloud-email"/u);
+  assert.match(
+    markup,
+    /<input\b(?=[^>]*id="cloud-email")(?=[^>]*name="email")(?=[^>]*type="email")(?=[^>]*autocomplete="username")(?=[^>]*required\b)[^>]*>/u
+  );
   assert.match(markup, /<label\b[^>]*for="cloud-password"/u);
   assert.match(
     markup,
@@ -1322,7 +1328,9 @@ test('login válido autentica a sessão, apaga a senha e carrega o painel remoto
   api.renderCloudAccess('login');
 
   const form = document.querySelector('#cloud-login-form');
+  const email = document.querySelector('#cloud-email');
   const password = document.querySelector('#cloud-password');
+  email.value = 'admin@cellf.example';
   password.value = 'senha-de-teste';
   document.querySelector('#cloud-privacy-accept').checked = true;
   let prevented = false;
@@ -1337,6 +1345,7 @@ test('login válido autentica a sessão, apaga a senha e carrega o painel remoto
   assert.equal(password.value, '');
   assert.equal(requests[0].url, '/api/session');
   assert.equal(requests[0].method, 'POST');
+  assert.equal(requests[0].body.email, 'admin@cellf.example');
   assert.equal(requests[1].url, '/api/state');
   assert.equal(requests[1].method, 'GET');
   assert.equal(document.body.classList.contains('cloud-auth-mode'), false);
@@ -1348,6 +1357,7 @@ test('login sem senha orienta o usuário sem enviar uma requisição', async () 
   api.renderCloudAccess('login');
 
   const form = document.querySelector('#cloud-login-form');
+  document.querySelector('#cloud-email').value = 'admin@cellf.example';
   const password = document.querySelector('#cloud-password');
   await form.listeners.get('submit')[0]({ preventDefault() {} });
 
@@ -1363,6 +1373,7 @@ test('login exige confirmação de privacidade e cookies antes de enviar a senha
   const form = document.querySelector('#cloud-login-form');
   const consent = document.querySelector('#cloud-privacy-accept');
   const status = document.querySelector('#cloud-login-status');
+  document.querySelector('#cloud-email').value = 'admin@cellf.example';
   document.querySelector('#cloud-password').value = 'senha-de-teste';
 
   await form.listeners.get('submit')[0]({ preventDefault() {} });
@@ -1386,6 +1397,7 @@ test('senha incorreta produz erro acessível e não deixa credenciais no formul�
   api.renderCloudAccess('login');
 
   const form = document.querySelector('#cloud-login-form');
+  document.querySelector('#cloud-email').value = 'admin@cellf.example';
   const password = document.querySelector('#cloud-password');
   const status = document.querySelector('#cloud-login-status');
   password.value = 'senha-incorreta';
@@ -1397,7 +1409,7 @@ test('senha incorreta produz erro acessível e não deixa credenciais no formul�
   assert.equal(password.value, '');
   assert.equal(password.getAttribute('aria-invalid'), 'true');
   assert.equal(status.getAttribute('role'), 'alert');
-  assert.match(status.textContent, /Senha incorreta/iu);
+  assert.match(status.textContent, /E-mail ou senha incorretos/iu);
   assert.equal(document.querySelector('#cloud-login-submit').disabled, false);
 });
 

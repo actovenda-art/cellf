@@ -90,7 +90,7 @@ test('a identidade oficial Cellf aparece nos metadados e no título', () => {
   const description = metaContent('description');
 
   assert.equal(metaContent('application-name'), 'Cellf');
-  assert.equal(metaContent('theme-color').toLowerCase(), '#e0f967');
+  assert.equal(metaContent('theme-color').toLowerCase(), '#d9f15a');
   assert.match(title ?? '', /^Cellf\s*[—-]\s*Reparo e Comércio$/u);
   assert.match(description, /Cellf/iu);
   assert.match(description, /assistência técnica/iu);
@@ -101,11 +101,11 @@ test('a logo oficial tem descrição acessível e também é usada como favicon'
   const logo = openingTags('img').find(attributes => hasClass(attributes, 'brand-logo'));
   const favicon = openingTags('link').find(attributes => attributes.rel === 'icon');
 
-  assert.equal(logo?.src, '/cellf-logo.png');
+  assert.equal(logo?.src, '/cellf-logo-updated.png');
   assert.match(logo?.alt ?? '', /Cellf.*Reparo e Comércio/iu);
   assert.ok(Number(logo?.width) > 0, 'A logo precisa declarar largura.');
   assert.ok(Number(logo?.height) > 0, 'A logo precisa declarar altura.');
-  assert.equal(favicon?.href, '/cellf-logo.png');
+  assert.equal(favicon?.href, '/cellf-mark.png');
   assert.equal(favicon?.type, 'image/png');
 });
 

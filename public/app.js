@@ -1643,6 +1643,7 @@ function setShellAccess(enabled) {
 }
 
 function renderCloudAccess(mode = 'login', message = '') {
+  const keepLoginOpen = Boolean(document.querySelector('#cellf-login-dialog')?.open);
   const login = mode === 'login';
   const loading = mode === 'loading';
   const configuration = mode === 'configuration';
@@ -1657,13 +1658,30 @@ function renderCloudAccess(mode = 'login', message = '') {
   const feedback = message && !(login && /UNAUTHENTICATED|sessão|autentic/i.test(message)) ? String(message) : '';
 
   setShellAccess(false);
-  content.innerHTML = `<section class="cloud-access-screen" aria-labelledby="cloud-access-title">
+  content.innerHTML = `<div class="cellf-public-page">
+    <header class="cellf-public-header">
+      <a class="cellf-public-brand" href="#" aria-label="CELLF — início"><img src="/cellf-logo-updated.png" alt="CELLF" width="2172" height="724"></a>
+      <nav aria-label="Navegação da apresentação"><a href="#cellf-services">Nossos serviços</a><button class="cellf-login-trigger" id="open-cellf-login" type="button" aria-haspopup="dialog" aria-controls="cellf-login-dialog">Login <span aria-hidden="true">↗</span></button></nav>
+    </header>
+    <section class="cellf-public-hero" aria-labelledby="cellf-presentation-title">
+      <div class="cellf-hero-copy"><p class="cellf-public-eyebrow">CELLF · REPARO E COMÉRCIO</p><h1 id="cellf-presentation-title">Seu celular.<br>Seu dia.<br><span>Tudo conectado.</span></h1><p class="cellf-hero-description">Reparo, compras e cuidado com o que conecta você. Na loja ou com entrega, a CELLF acompanha a sua rotina.</p><a class="cellf-public-cta" href="#cellf-services">Conheça nossos serviços <span aria-hidden="true">↓</span></a></div>
+      <div class="cellf-hero-art" aria-label="CELLF: tecnologia e cuidado"><span class="cellf-art-label">TECNOLOGIA COM CUIDADO</span><img src="/cellf-mark.png" alt="Símbolo F da CELLF com reflexo em ciano claro" width="1024" height="1024"><div class="cellf-art-caption"><span>Da nossa loja<br>até você.</span><span aria-hidden="true">↗</span></div></div>
+    </section>
+    <section class="cellf-public-services" id="cellf-services" aria-labelledby="cellf-services-title"><div class="cellf-services-heading"><p class="cellf-public-eyebrow">DO SEU JEITO</p><h2 id="cellf-services-title">Quatro formas de estar perto.</h2><p>Escolha como prefere comprar ou cuidar do seu aparelho.</p></div><div class="cellf-service-grid">
+      <article><span class="cellf-service-number">01 /</span><h3>Entrega</h3><p>Faça sua compra e receba no endereço informado no pedido.</p><span class="cellf-service-tag">Sua compra até você</span></article>
+      <article><span class="cellf-service-number">02 /</span><h3>Busca e leva</h3><p>Coleta e devolução do aparelho para você cuidar do reparo sem sair de casa.</p><span class="cellf-service-tag">Reparo com comodidade</span></article>
+      <article><span class="cellf-service-number">03 /</span><h3>Venda balcão</h3><p>Visite a loja, conheça os produtos e faça sua compra com atendimento presencial.</p><span class="cellf-service-tag">Escolha de perto</span></article>
+      <article><span class="cellf-service-number">04 /</span><h3>Serviço em loja</h3><p>Traga seu aparelho para avaliação e acompanhe as orientações para o reparo.</p><span class="cellf-service-tag">Cuidado com seu aparelho</span></article>
+    </div></section>
+    <footer class="cellf-public-footer"><strong>CELLF <span>Reparo e Comércio</span></strong><p>Tecnologia que faz parte do seu dia.</p><a href="#">Voltar ao topo ↑</a></footer>
+    <dialog class="cellf-login-dialog" id="cellf-login-dialog" aria-labelledby="cloud-access-title"><button class="cellf-login-close" id="close-cellf-login" type="button" aria-label="Fechar login">×</button><section class="cloud-access-screen" aria-labelledby="cloud-access-title">
     <div class="cloud-access-card">
-      <div class="cloud-brand"><img src="/cellf-logo.png" alt="Cellf — Reparo e Comércio" width="1600" height="800"></div>
+      <div class="cloud-brand"><img src="/cellf-logo-updated.png" alt="Cellf — Reparo e Comércio" width="2172" height="724"></div>
       <div class="cloud-access-body">
         <div class="cloud-access-heading"><span class="cloud-access-kicker">ACESSO SEGURO</span><h1 id="cloud-access-title">${esc(title)}</h1>${description ? `<p>${esc(description)}</p>` : ''}</div>
         ${login ? `<form id="cloud-login-form" class="cloud-login-form" method="post" autocomplete="on">
           <div class="cloud-account"><span class="cloud-account-avatar" aria-hidden="true">C</span><span><strong>Administrador Cellf</strong><small>Ambiente empresarial protegido</small></span><span class="cloud-account-check" aria-hidden="true">✓</span></div>
+          <div class="field"><label for="cloud-email">E-MAIL</label><input id="cloud-email" name="email" type="email" autocomplete="username" inputmode="email" placeholder="nome@empresa.com.br" aria-describedby="cloud-login-status" required></div>
           <div class="field cloud-password-field"><label for="cloud-password">SENHA DE ACESSO</label><div class="cloud-password-control"><input id="cloud-password" name="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" aria-describedby="cloud-login-status" required><button type="button" class="cloud-password-toggle" data-action="toggle-cloud-password" aria-label="Mostrar senha" aria-pressed="false">◉</button></div></div>
           <section class="cloud-privacy" aria-label="Privacidade e cookies">
             <details class="cloud-privacy-details"><summary><span>Privacidade e cookies</span><span class="cloud-privacy-hint">Ver informações</span></summary>
@@ -1677,12 +1695,27 @@ function renderCloudAccess(mode = 'login', message = '') {
           </section>
           <p id="cloud-login-status" class="cloud-login-status${feedback ? ' is-error' : ''}" role="${feedback ? 'alert' : 'status'}" aria-live="polite">${esc(feedback)}</p>
           <button id="cloud-login-submit" class="primary-button cloud-login-submit" type="submit"><span>Entrar no sistema</span><span aria-hidden="true">→</span></button>
-        </form>` : `<div class="cloud-access-details${loading ? ' is-loading' : ''}">${loading ? '<span class="cloud-loading-spinner" aria-hidden="true"></span><span>Verificando conexão segura…</span>' : `<span aria-hidden="true">${configuration ? '⚙' : '↻'}</span><p>${esc(feedback || (configuration ? 'Configure as credenciais do Supabase, a senha administrativa e o segredo da sessão nas variáveis de ambiente do servidor.' : 'Seus dados permanecem protegidos no Supabase e serão exibidos assim que a conexão for restabelecida.'))}</p><button type="button" class="primary-button cloud-login-submit" data-action="retry-cloud">Tentar novamente</button>`}</div>`}
+        </form>` : `<div class="cloud-access-details${loading ? ' is-loading' : ''}">${loading ? '<span class="cloud-loading-spinner" aria-hidden="true"></span><span>Verificando conexão segura…</span>' : `<span aria-hidden="true">${configuration ? '⚙' : '↻'}</span><p>${esc(feedback || (configuration ? 'Configure as credenciais do Supabase, o e-mail administrativo, a senha protegida e o segredo da sessão nas variáveis de ambiente do servidor.' : 'Seus dados permanecem protegidos no Supabase e serão exibidos assim que a conexão for restabelecida.'))}</p><button type="button" class="primary-button cloud-login-submit" data-action="retry-cloud">Tentar novamente</button>`}</div>`}
         <div class="cloud-access-security"><span><span aria-hidden="true">◈</span> Sessão protegida</span></div>
       </div>
     </div>
     <p class="cloud-access-footer">Cellf · Gestão de assistência técnica</p>
-  </section>`;
+  </section></dialog></div>`;
+
+  const loginDialog = document.querySelector('#cellf-login-dialog');
+  const loginTrigger = document.querySelector('#open-cellf-login');
+  if (keepLoginOpen) loginDialog?.showModal();
+  loginTrigger?.addEventListener('click', () => {
+    loginDialog.showModal();
+    document.querySelector('#cloud-email')?.focus();
+  });
+  document.querySelector('#close-cellf-login')?.addEventListener('click', () => loginDialog.close());
+  loginDialog?.addEventListener('click', event => {
+    if (event.target === loginDialog) {
+      const bounds = loginDialog.getBoundingClientRect();
+      if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) loginDialog.close();
+    }
+  });
 
   const form = document.querySelector('#cloud-login-form');
   const privacyConsent = document.querySelector('#cloud-privacy-accept');
@@ -1714,10 +1747,18 @@ function renderCloudAccess(mode = 'login', message = '') {
 
   form?.addEventListener('submit', async event => {
     event.preventDefault();
+    const emailInput = document.querySelector('#cloud-email');
     const input = document.querySelector('#cloud-password');
     const button = document.querySelector('#cloud-login-submit');
     const status = document.querySelector('#cloud-login-status');
+    const email = String(emailInput?.value || '').trim().toLowerCase();
     const password = input?.value || '';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+      if (status) { status.textContent = 'Informe um e-mail válido para continuar.'; status.classList.add('is-error'); }
+      emailInput?.setAttribute('aria-invalid', 'true');
+      emailInput?.focus();
+      return;
+    }
     if (!password) {
       if (status) { status.textContent = 'Informe sua senha para continuar.'; status.classList.add('is-error'); }
       input?.focus();
@@ -1732,9 +1773,10 @@ function renderCloudAccess(mode = 'login', message = '') {
 
     if (button) { button.disabled = true; button.innerHTML = '<span>Verificando acesso…</span>'; }
     if (status) { status.textContent = 'Validando sua sessão protegida…'; status.classList.remove('is-error'); }
+    emailInput?.removeAttribute('aria-invalid');
     input?.removeAttribute('aria-invalid');
     try {
-      await authenticate(password);
+      await authenticate(email, password);
       if (input) input.value = '';
       await bootstrapApplication();
     } catch (error) {
@@ -1743,7 +1785,7 @@ function renderCloudAccess(mode = 'login', message = '') {
         return;
       }
       if (status?.isConnected) {
-        status.textContent = error?.status === 401 ? 'Senha incorreta. Confira e tente novamente.' : error?.message || 'Não foi possível validar seu acesso.';
+        status.textContent = error?.status === 401 ? 'E-mail ou senha incorretos. Confira e tente novamente.' : error?.message || 'Não foi possível validar seu acesso.';
         status.classList.add('is-error');
         status.setAttribute('role', 'alert');
       }
@@ -1751,14 +1793,16 @@ function renderCloudAccess(mode = 'login', message = '') {
       if (button?.isConnected) { button.disabled = false; button.innerHTML = '<span>Entrar no sistema</span><span aria-hidden="true">→</span>'; }
     }
   });
-  if (login) setTimeout(() => document.querySelector('#cloud-password')?.focus(), 30);
 }
 
-async function authenticate(password) {
+async function authenticate(email, password) {
   const result = await apiRequest('/api/session', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password: String(password || '') })
+    body: JSON.stringify({
+      email: String(email || '').trim().toLowerCase(),
+      password: String(password || '')
+    })
   });
   setCloudStatus('connected');
   return result;

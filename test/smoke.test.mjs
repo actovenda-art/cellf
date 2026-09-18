@@ -61,7 +61,7 @@ test('a aplicação apresenta a marca Cellf e todos os módulos operacionais', a
   assert.equal(response.status, 200);
   assert.match(response.headers.get('content-type'), /^text\/html/);
   assert.match(html, /Cellf/i);
-  assert.match(html, /cellf-logo\.png/);
+  assert.match(html, /cellf-logo-updated\.png/);
 
   for (const view of ['dashboard', 'orders', 'deliveries', 'customers', 'products', 'services', 'sales', 'payables', 'reports', 'settings', 'agenda']) {
     assert.match(html, new RegExp(`data-view=["']${view}["']`), `O módulo ${view} precisa estar disponível na navegação.`);
@@ -72,7 +72,8 @@ test('os arquivos de interface e a logo oficial são entregues com o formato cor
   const files = [
     ['/styles.css', 'text/css'],
     ['/app.js', 'text/javascript'],
-    ['/cellf-logo.png', 'image/png']
+    ['/cellf-logo-updated.png', 'image/png'],
+    ['/cellf-mark.png', 'image/png']
   ];
 
   await Promise.all(files.map(async ([path, type]) => {

@@ -174,9 +174,12 @@ test('barras de rolagem são ocultadas sem desativar a navegação dos conteúdo
   assert.doesNotMatch(stylesheet, /scrollbar-width\s*:\s*thin\b/iu);
 });
 
-test('a cor oficial Cellf permanece no token principal da marca', () => {
-  assertProperty(':root', '--accent', /^#e0f967$/iu);
+test('a paleta oficial Cellf mantém preto, verde e ciano como pilares da marca', () => {
+  assertProperty(':root', '--ink', /^#000000$/iu);
+  assertProperty(':root', '--accent', /^#d9f15a$/iu);
   assertProperty(':root', '--accent-deep', /^#[0-9a-f]{6}$/iu);
+  assertProperty(':root', '--cyan', /^#00aeef$/iu);
+  assertProperty(':root', '--cyan-deep', /^#[0-9a-f]{6}$/iu);
 });
 
 test('a logo do login permanece centralizada e contida sem expandir o banner', () => {

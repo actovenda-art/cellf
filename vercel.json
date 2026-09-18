@@ -17,6 +17,8 @@
     { "src": "/styles.css", "dest": "/public/styles.css" },
     { "src": "/app.js", "dest": "/public/app.js" },
     { "src": "/cellf-logo.png", "dest": "/public/cellf-logo.png" },
+    { "src": "/cellf-logo-updated.png", "dest": "/public/cellf-logo-updated.png" },
+    { "src": "/cellf-mark.png", "dest": "/public/cellf-mark.png" },
     { "src": "/.*", "dest": "/public/index.html" }
   ]
 }

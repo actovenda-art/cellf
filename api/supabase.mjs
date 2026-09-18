@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 
 export const SESSION_COOKIE_NAME = 'cellf_session';
 export const SESSION_DURATION_SECONDS = 12 * 60 * 60;
@@ -119,7 +119,8 @@ export function isSupabaseConfigured() {
 
 export function isAuthConfigured() {
   return Boolean(
-    String(process.env.CELLF_APP_PASSWORD || '').trim()
+    normalizeLoginEmail(process.env.CELLF_ADMIN_EMAIL)
+    && String(process.env.CELLF_APP_PASSWORD_HASH || process.env.CELLF_APP_PASSWORD || '').trim()
     && String(process.env.CELLF_AUTH_SECRET || '').trim().length >= 32
   );
 }
@@ -208,22 +209,58 @@ function cookieValue(request, name) {
   return '';
 }
 
-export function verifyPassword(password) {
+export function normalizeLoginEmail(email) {
+  const value = String(email || '').trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) && value.length <= 254 ? value : '';
+}
+
+export function hashPassword(password, salt = randomBytes(16).toString('base64url')) {
+  if (typeof password !== 'string' || password.length < 8 || password.length > 1024) {
+    throw new ApiError(400, 'INVALID_PASSWORD', 'A senha deve ter entre 8 e 1024 caracteres.');
+  }
+  if (!/^[A-Za-z0-9_-]{16,128}$/.test(String(salt))) {
+    throw new ApiError(400, 'INVALID_PASSWORD_SALT', 'O salt da senha é inválido.');
+  }
+  const digest = scryptSync(password, String(salt), 32).toString('base64url');
+  return `scrypt:${salt}:${digest}`;
+}
+
+function verifyPassword(password) {
   if (!isAuthConfigured() || typeof password !== 'string' || password.length > 1024) return false;
-  const expected = createHash('sha256').update(String(process.env.CELLF_APP_PASSWORD)).digest();
+  const encoded = String(process.env.CELLF_APP_PASSWORD_HASH || '').trim();
+  const match = /^scrypt:([A-Za-z0-9_-]{16,128}):([A-Za-z0-9_-]{43})$/.exec(encoded);
+  if (match) {
+    const expected = Buffer.from(match[2], 'base64url');
+    const actual = scryptSync(password, match[1], expected.length);
+    return expected.length === actual.length && timingSafeEqual(expected, actual);
+  }
+  const expected = createHash('sha256').update(String(process.env.CELLF_APP_PASSWORD || '')).digest();
   const actual = createHash('sha256').update(password).digest();
   return timingSafeEqual(expected, actual);
 }
 
-export function issueSession() {
+export function verifyCredentials(email, password) {
+  const expectedEmail = normalizeLoginEmail(process.env.CELLF_ADMIN_EMAIL);
+  const actualEmail = normalizeLoginEmail(email);
+  const emailMatches = expectedEmail && actualEmail && safeEqual(actualEmail, expectedEmail);
+  return Boolean(emailMatches && verifyPassword(password));
+}
+
+export function issueSession(email = process.env.CELLF_ADMIN_EMAIL) {
   if (!isAuthConfigured()) {
     throw new ApiError(503, 'AUTH_NOT_CONFIGURED', 'O acesso seguro da Cellf ainda não foi configurado.');
+  }
+
+  const sessionEmail = normalizeLoginEmail(email);
+  if (!sessionEmail || !safeEqual(sessionEmail, normalizeLoginEmail(process.env.CELLF_ADMIN_EMAIL))) {
+    throw new ApiError(401, 'INVALID_CREDENTIALS', 'E-mail ou senha incorretos.');
   }
 
   const issuedAt = Math.floor(Date.now() / 1000);
   const expiresAt = issuedAt + SESSION_DURATION_SECONDS;
   const payload = Buffer.from(JSON.stringify({
     sub: 'cellf-admin',
+    email: sessionEmail,
     iat: issuedAt,
     exp: expiresAt,
     jti: randomBytes(18).toString('base64url')
@@ -250,6 +287,7 @@ export function readSession(request) {
     const now = Math.floor(Date.now() / 1000);
     if (
       session.sub !== 'cellf-admin'
+      || session.email !== normalizeLoginEmail(process.env.CELLF_ADMIN_EMAIL)
       || !Number.isSafeInteger(session.iat)
       || !Number.isSafeInteger(session.exp)
       || session.iat > now + 60
@@ -268,7 +306,7 @@ export function requireAuthenticatedSession(request) {
   }
   const session = readSession(request);
   if (!session) {
-    throw new ApiError(401, 'AUTH_REQUIRED', 'Entre com a senha da Cellf para acessar estes dados.');
+    throw new ApiError(401, 'AUTH_REQUIRED', 'Entre com seu e-mail e senha da Cellf para acessar estes dados.');
   }
   if (!['GET', 'HEAD'].includes(String(request.method || 'GET').toUpperCase())) {
     assertSameOrigin(request);

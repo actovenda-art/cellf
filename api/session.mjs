@@ -9,7 +9,7 @@ import {
   sendApiError,
   sendJson,
   setSessionCookie,
-  verifyPassword
+  verifyCredentials
 } from './supabase.mjs';
 
 export default async function handler(request, response) {
@@ -31,7 +31,8 @@ export default async function handler(request, response) {
       const session = readSession(request);
       return sendJson(response, 200, {
         authenticated: Boolean(session),
-        expiresAt: session ? new Date(session.exp * 1000).toISOString() : null
+        expiresAt: session ? new Date(session.exp * 1000).toISOString() : null,
+        email: session?.email || null
       });
     }
 
@@ -47,13 +48,17 @@ export default async function handler(request, response) {
     }
 
     const body = await readJsonBody(request, { maxBytes: 4 * 1024 });
-    if (!verifyPassword(body.password)) {
-      throw new ApiError(401, 'INVALID_CREDENTIALS', 'A senha informada está incorreta.');
+    if (!verifyCredentials(body.email, body.password)) {
+      throw new ApiError(401, 'INVALID_CREDENTIALS', 'E-mail ou senha incorretos.');
     }
 
-    const session = issueSession();
+    const session = issueSession(body.email);
     setSessionCookie(response, request, session.token);
-    return sendJson(response, 200, { authenticated: true, expiresAt: session.expiresAt });
+    return sendJson(response, 200, {
+      authenticated: true,
+      expiresAt: session.expiresAt,
+      email: String(body.email || '').trim().toLowerCase()
+    });
   } catch (error) {
     return sendApiError(response, error);
   }
