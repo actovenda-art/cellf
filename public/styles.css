@@ -2242,7 +2242,30 @@ body.cloud-auth-mode {
 /* Public presentation and on-demand account access. */
 body.cloud-auth-mode .content { display: block; padding: 0; }
 .cellf-public-page { width: 100%; background: #f7f8f2; color: #101310; }
-.cellf-public-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; max-width: 1280px; margin: auto; padding: 24px 40px; }
+.cellf-public-header {
+  position: sticky;
+  top: 12px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  width: calc(100% - 32px);
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px 28px;
+  border: 1px solid rgba(255, 255, 255, .85);
+  border-radius: 24px;
+  background: #f0f3e9;
+  box-shadow: 0 12px 40px rgba(22, 37, 22, .09), inset 0 1px 0 #fff;
+}
+@supports (backdrop-filter: blur(20px)) or (-webkit-backdrop-filter: blur(20px)) {
+  .cellf-public-header {
+    background: linear-gradient(120deg, rgba(255, 255, 255, .8), rgba(239, 248, 221, .62));
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+  }
+}
 .cellf-public-brand { display: block; width: 170px; }
 .cellf-public-brand img { display: block; width: 100%; height: auto; }
 .cellf-public-header nav { display: flex; align-items: center; gap: 32px; }
@@ -2260,7 +2283,7 @@ body.cloud-auth-mode .content { display: block; padding: 0; }
 .cellf-hero-art img { display: block; width: 85%; height: auto; max-height: 330px; object-fit: contain; align-self: center; }
 .cellf-art-caption { display: flex; justify-content: space-between; align-items: end; font-size: 23px; line-height: 1.2; font-weight: 750; letter-spacing: -.04em; }
 .cellf-art-caption > span:last-child { font-size: 44px; }
-.cellf-public-services { background: #101310; color: #fff; padding: 72px max(40px, calc((100vw - 1200px) / 2)); scroll-margin-top: 24px; }
+.cellf-public-services { background: #101310; color: #fff; padding: 72px max(40px, calc((100vw - 1200px) / 2)); scroll-margin-top: 120px; }
 .cellf-services-heading .cellf-public-eyebrow { color: #d9f15a; }
 .cellf-services-heading h2 { font-size: clamp(28px, 3vw, 42px); line-height: 1.15; letter-spacing: -.04em; margin: 16px 0; }
 .cellf-services-heading > p:last-child { color: #bbc5b7; line-height: 1.65; }
@@ -2282,7 +2305,7 @@ body.cloud-auth-mode .content { display: block; padding: 0; }
   .cellf-service-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 600px) {
-  .cellf-public-header { padding: 18px 20px; gap: 12px; }
+  .cellf-public-header { top: 8px; width: calc(100% - 20px); padding: 12px; gap: 12px; border-radius: 20px; }
   .cellf-public-brand { width: 130px; }
   .cellf-public-header nav > a { display: none; }
   .cellf-login-trigger { gap: 16px; padding: 13px 19px; }
@@ -2295,6 +2318,39 @@ body.cloud-auth-mode .content { display: block; padding: 0; }
   .cellf-service-grid { grid-template-columns: 1fr; }
   .cellf-service-grid h3 { margin-top: 20px; }
   .cellf-public-footer { padding: 28px 20px; }
+}
+
+.cellf-public-page { padding-top: 12px; }
+.cellf-public-header nav > a { position: relative; }
+.cellf-public-header nav > a::after { content: ''; position: absolute; left: 0; right: 0; bottom: -7px; height: 2px; background: #006b93; transform: scaleX(0); transform-origin: left; transition: transform .22s ease; }
+.cellf-public-header nav > a:is(:hover, :focus-visible)::after { transform: scaleX(1); }
+.cellf-public-page :is(button, a):focus-visible { outline: 3px solid #006b93; outline-offset: 5px; }
+.cellf-public-cta, .cellf-login-trigger, .cellf-login-close, .cellf-public-brand { transition: transform .2s ease, box-shadow .2s ease, background .2s ease; }
+.cellf-public-cta > span, .cellf-login-trigger > span { display: inline-block; transition: transform .2s ease; }
+.cellf-public-cta:is(:hover, :focus-visible) { background: #e4f783; box-shadow: 0 8px 24px rgba(102, 128, 12, .18); }
+.cellf-public-cta:is(:hover, :focus-visible) > span { transform: translateY(3px); }
+.cellf-login-trigger:is(:hover, :focus-visible) > span { transform: translate(2px, -2px); }
+.cellf-public-page :is(.cellf-public-cta, .cellf-login-trigger, .cellf-login-close):active { transform: scale(.97); }
+.cellf-service-grid article { transition: transform .25s ease, border-color .25s ease, background .25s ease, box-shadow .25s ease; }
+.cellf-hero-art img { transition: transform .5s cubic-bezier(.2,.7,.2,1); }
+@media (hover: hover) and (pointer: fine) {
+  .cellf-service-grid article:hover { transform: translateY(-7px); border-color: #d9f15a; background: #242e20; box-shadow: 0 16px 30px rgba(0,0,0,.22); }
+  .cellf-hero-art:hover img { transform: translateY(-6px) rotate(-3deg) scale(1.035); }
+  .cellf-public-brand:hover { transform: scale(1.035); }
+}
+@keyframes cellf-enter { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: no-preference) {
+  html:has(.cellf-public-page) { scroll-behavior: smooth; }
+  .cellf-hero-copy { animation: cellf-enter .6s ease both; }
+  .cellf-hero-art { animation: cellf-enter .7s .1s ease both; }
+  .cellf-login-dialog[open] { animation: cellf-enter .22s ease both; }
+  @supports (animation-timeline: view()) {
+    .cellf-services-heading { animation: cellf-enter linear both; animation-timeline: view(); animation-range: entry 0% entry 90%; }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cellf-public-page *, .cellf-public-page *::after { animation: none !important; transition: none !important; }
+  .cellf-public-page :is(article, img, a, button, span) { transform: none !important; }
 }
 
 @media print {
