@@ -221,6 +221,7 @@ function fixture(overrides = {}) {
     stockMovements: [],
     activity: [],
     companyDocuments: [],
+    operationalDataVersion: 'controle-cellf-2026-09-v1',
     ...overrides,
     settings
   };
@@ -368,16 +369,19 @@ function plain(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-test('um projeto novo cria dados iniciais e associa clientes às ordens existentes', () => {
+test('um projeto novo carrega os dados reais sem criar clientes identificados', () => {
   const { api } = createApplication({ stored: null });
 
-  assert.ok(api.state.orders.length > 0);
-  assert.equal(api.state.customers.length, api.state.orders.length);
+  assert.equal(api.state.sales.length, 13);
+  assert.equal(api.state.orders.length, 6);
+  assert.equal(api.state.payables.length, 5);
+  assert.equal(api.state.customers.length, 0);
 
   for (const order of api.state.orders) {
-    assert.ok(order.customerId, 'Toda ordem inicial precisa estar vinculada a um cliente.');
-    assert.ok(api.state.customers.some(customer => customer.id === order.customerId));
+    assert.equal(order.customerId, '');
+    assert.equal(order.customer, 'Cliente sem identificação');
   }
+  assert.ok(api.state.sales.every(sale => sale.customer === 'Cliente sem identificação' && sale.customerId === ''));
 });
 
 test('dados recebidos da nuvem são normalizados sem duplicar telefones equivalentes', () => {
@@ -475,12 +479,55 @@ test('o estado remoto atual tem prioridade sobre uma estrutura anterior', () => 
   assert.equal(api.state.settings.managerName, 'Responsável atual');
 });
 
+test('a importação operacional substitui dados ilustrativos e preserva configurações da empresa', () => {
+  const { api } = createApplication();
+  const imported = api.loadState({
+    products: [{ id: 'demo', name: 'Produto demonstrativo' }],
+    services: [],
+    orders: [{ id: 'OS-DEMO', customer: 'Cliente Exemplo' }],
+    customers: [{ id: 'cliente-demo', name: 'Cliente Exemplo' }],
+    sales: [],
+    payables: [],
+    companyDocuments: [{ id: 'contrato-real', name: 'Contrato social' }],
+    settings: { companyName: 'Cellf Real', managerName: 'Administrador Real' }
+  }, { applyOperationalImport: true });
+
+  assert.equal(imported.operationalDataVersion, 'controle-cellf-2026-09-v1');
+  assert.equal(imported.products.length, 12);
+  assert.equal(imported.sales.length, 13);
+  assert.equal(imported.orders.length, 6);
+  assert.equal(imported.payables.length, 5);
+  assert.equal(imported.customers.length, 0);
+  assert.equal(imported.settings.companyName, 'Cellf Real');
+  assert.equal(imported.companyDocuments[0].id, 'contrato-real');
+  assert.ok(imported.orders.every(order => order.customer === 'Cliente sem identificação'));
+});
+
+test('a primeira carga remota grava a importação real no Supabase uma única vez', async () => {
+  const previous = fixture({ settings: { companyName: 'Cellf Persistida', managerName: 'Responsável Persistido' } });
+  delete previous.operationalDataVersion;
+  const { api, writes, remoteState } = createApplication({ stored: previous });
+
+  await api.loadRemoteState();
+
+  assert.equal(writes.length, 1);
+  assert.equal(remoteState.value.operationalDataVersion, 'controle-cellf-2026-09-v1');
+  assert.equal(remoteState.value.sales.length, 13);
+  assert.equal(remoteState.value.orders.length, 6);
+  assert.equal(remoteState.value.customers.length, 0);
+  assert.equal(remoteState.value.settings.companyName, 'Cellf Persistida');
+
+  await api.loadRemoteState();
+  assert.equal(writes.length, 1, 'A mesma versão não deve reimportar nem sobrescrever alterações futuras.');
+});
+
 test('um estado remoto inválido não impede a recuperação segura dos dados iniciais', () => {
   const { api } = createApplication({ stored: '{json inválido' });
 
   assert.ok(api.state.products.length > 0);
   assert.ok(api.state.orders.length > 0);
-  assert.equal(api.state.customers.length, api.state.orders.length);
+  assert.equal(api.state.customers.length, 0);
+  assert.ok(api.state.orders.every(order => order.customer === 'Cliente sem identificação'));
   assert.equal(api.state.settings.companyName, 'Cellf');
 });
 
@@ -915,6 +962,24 @@ test('o relatório calcula faturamento, custos, despesas e resultado líquido', 
   assert.match(document.querySelector('#app-content').innerHTML, /Serviços \/dia/u);
   assert.match(document.querySelector('#app-content').innerHTML, /Produtos \/dia/u);
   assert.doesNotMatch(document.querySelector('#app-content').innerHTML, /EM BREVE/iu);
+});
+
+test('os dados reais reproduzem os totais e indicadores da planilha', () => {
+  const { api } = createApplication({ stored: null });
+  api.setReportPeriod(0);
+  const data = api.reportData();
+
+  assert.equal(data.sales.length, 13);
+  assert.equal(data.delivered.length, 6);
+  assert.equal(data.salesRevenue, 379);
+  assert.equal(data.serviceRevenue, 1160);
+  assert.equal(data.costOfSales, 129);
+  assert.equal(data.serviceCosts, 337);
+  assert.equal(data.totalProfit, 1073);
+  assert.equal(Math.round(data.averageServiceMargin * 1e10) / 1e10, 0.7582545379);
+  assert.equal(Math.round(data.averageProductMargin * 1e10) / 1e10, 0.6963010204);
+  assert.equal(data.servicesPerDay, 0.75);
+  assert.equal(data.productsPerDay, 1.625);
 });
 
 test('a seleção do período diferencia dados recentes de todo o histórico', () => {
