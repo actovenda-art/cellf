@@ -48,11 +48,11 @@ const seed = {
     { id: 'p6', sku: 'SUP-CAR-MAG', name: 'Suporte Veicular Magnético', category: 'Acessórios', cost: 25, price: 64.9, stock: 9, minimum: 3 }
   ],
   services: [
-    { id: 's1', name: 'Troca de tela — iPhone 13', category: 'Tela', pricing: 'fixed', price: 649, duration: 120, active: true },
-    { id: 's2', name: 'Troca de conector de carga', category: 'Conector', pricing: 'quote', price: null, duration: 90, active: true },
-    { id: 's3', name: 'Troca de bateria — linha iPhone', category: 'Bateria', pricing: 'fixed', price: 289, duration: 60, active: true },
-    { id: 's4', name: 'Reparo em placa', category: 'Placa', pricing: 'quote', price: null, duration: 180, active: true },
-    { id: 's5', name: 'Limpeza e desoxidação', category: 'Manutenção', pricing: 'fixed', price: 149, duration: 90, active: true }
+    { id: 's1', name: 'Troca de tela — iPhone 13', category: 'Tela', pricing: 'fixed', price: 649, cost: null, duration: 120, active: true },
+    { id: 's2', name: 'Troca de conector de carga', category: 'Conector', pricing: 'quote', price: null, cost: null, duration: 90, active: true },
+    { id: 's3', name: 'Troca de bateria — linha iPhone', category: 'Bateria', pricing: 'fixed', price: 289, cost: null, duration: 60, active: true },
+    { id: 's4', name: 'Reparo em placa', category: 'Placa', pricing: 'quote', price: null, cost: null, duration: 180, active: true },
+    { id: 's5', name: 'Limpeza e desoxidação', category: 'Manutenção', pricing: 'fixed', price: 149, cost: null, duration: 90, active: true }
   ],
   orders: [
     { id: 'OS-1048', customer: 'André Martins', phone: '(11) 98842-1120', device: 'iPhone 13 Pro', imei: '356938035643809', issue: 'Tela sem imagem após queda', serviceId: 's1', value: 649, status: 'progress', createdAt: offsetDate(-2), dueAt: offsetDate(1), reminderAt: `${offsetDate(1)}T10:00`, reminder: 'Avisar quando a tela chegar do fornecedor' },
@@ -1055,6 +1055,14 @@ function withinPeriod(value, days = reportPeriod) {
   return key >= offsetDate(-(days - 1)) && key <= isoToday();
 }
 
+function inclusiveDaySpan(values = []) {
+  const days = values.map(value => String(value || '').slice(0, 10)).filter(value => /^\d{4}-\d{2}-\d{2}$/.test(value)).sort();
+  if (!days.length) return 1;
+  const first = new Date(`${days[0]}T12:00:00`);
+  const last = new Date(`${days.at(-1)}T12:00:00`);
+  return Math.max(1, Math.round((last - first) / 86400000) + 1);
+}
+
 function reportData() {
   const sales = state.sales.filter(sale => sale.status !== 'cancelled' && withinPeriod(sale.createdAt));
   const orders = state.orders.filter(order => withinPeriod(order.createdAt));
@@ -1063,9 +1071,32 @@ function reportData() {
   const salesRevenue = sum(sales, 'total');
   const serviceRevenue = sum(delivered, 'value');
   const costOfSales = sales.reduce((total, sale) => total + sale.items.reduce((cost, item) => cost + Number(item.cost || 0) * item.quantity, 0), 0);
+  const deliveredWithCost = delivered.map(order => {
+    const service = state.services.find(item => item.id === order.serviceId);
+    const cost = order.serviceCost != null ? Number(order.serviceCost) : service?.cost == null ? null : Number(service.cost);
+    return { order, cost };
+  });
+  const serviceCosts = deliveredWithCost.reduce((total, entry) => total + Number(entry.cost || 0), 0);
+  const serviceMargins = deliveredWithCost.filter(entry => Number(entry.order.value) > 0 && entry.cost != null).map(entry => (Number(entry.order.value) - entry.cost) / Number(entry.order.value));
+  const productMargins = sales.flatMap(sale => sale.items).filter(item => Number(item.unitPrice) > 0 && item.cost != null).map(item => (Number(item.unitPrice) - Number(item.cost)) / Number(item.unitPrice));
   const expenses = sum(paidPayables);
   const revenue = salesRevenue + serviceRevenue;
-  return { sales, orders, delivered, paidPayables, salesRevenue, serviceRevenue, costOfSales, expenses, revenue, grossProfit: revenue - costOfSales - expenses };
+  const totalProfit = revenue - costOfSales - serviceCosts;
+  const daySpan = inclusiveDaySpan([...sales.map(sale => sale.createdAt), ...delivered.map(order => order.deliveredAt || order.createdAt)]);
+  const serviceCount = delivered.length;
+  const productCount = sales.reduce((total, sale) => total + sale.items.reduce((quantity, item) => quantity + Number(item.quantity || 0), 0), 0);
+  return {
+    sales, orders, delivered, paidPayables, salesRevenue, serviceRevenue, costOfSales, serviceCosts, expenses, revenue,
+    totalProfit,
+    grossProfit: totalProfit - expenses,
+    averageServiceMargin: serviceMargins.length ? serviceMargins.reduce((total, value) => total + value, 0) / serviceMargins.length : null,
+    averageProductMargin: productMargins.length ? productMargins.reduce((total, value) => total + value, 0) / productMargins.length : null,
+    servicesPerDay: serviceCount / daySpan,
+    productsPerDay: productCount / daySpan,
+    serviceCount,
+    productCount,
+    daySpan
+  };
 }
 
 function renderReports() {
@@ -1088,12 +1119,15 @@ function renderReports() {
     return { label: category, amount: matching.reduce((total, item) => total + item.quantity * item.unitPrice, 0), count: matching.reduce((total, item) => total + item.quantity, 0) };
   }).filter(item => item.amount).sort((a, b) => b.amount - a.amount).slice(0, 5);
   const expenseCategories = [...new Set(data.paidPayables.map(payable => payable.category))].map(category => ({ label: category, amount: sum(data.paidPayables.filter(payable => payable.category === category)), count: data.paidPayables.filter(payable => payable.category === category).length })).sort((a, b) => b.amount - a.amount);
+  const percent = value => value == null ? '—' : `${(value * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+  const daily = value => Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
 
   content.innerHTML = `${pageHeading('INTELIGÊNCIA DO NEGÓCIO', 'Relatórios e resultados', 'Entenda o desempenho da loja com dados reais da operação.', '<button class="ghost-button" data-action="export-report">↓ Exportar relatório</button>')}
     <div class="report-toolbar"><div class="segmented-control" role="group" aria-label="Período do relatório"><button class="segment ${reportPeriod === 7 ? 'active' : ''}" data-action="report-period" data-days="7">7 dias</button><button class="segment ${reportPeriod === 30 ? 'active' : ''}" data-action="report-period" data-days="30">30 dias</button><button class="segment ${reportPeriod === 90 ? 'active' : ''}" data-action="report-period" data-days="90">90 dias</button><button class="segment ${reportPeriod === 0 ? 'active' : ''}" data-action="report-period" data-days="0">Tudo</button></div><span class="result-count">${esc(periodLabel)} · atualizado agora</span></div>
-    <div class="stats-grid">${statCard('FATURAMENTO TOTAL', brl.format(data.revenue), '↗', `${data.sales.length} vendas · ${data.delivered.length} ordens entregues`, true)}${statCard('RESULTADO LÍQUIDO', brl.format(data.grossProfit), '◈', `${margin}% de margem após custos e despesas`)}${statCard('A RECEBER', brl.format(sum(openReceivables, 'value')), '⌁', `${openReceivables.length} ordens com valor definido`)}${statCard('DESPESAS PAGAS', brl.format(data.expenses), '↘', `${data.paidPayables.length} pagamentos no período`)}</div>
+    <section class="report-priority" aria-labelledby="report-priority-title"><header class="report-priority-heading"><div><p class="eyebrow">INDICADORES EM DESTAQUE</p><h2 id="report-priority-title">Rentabilidade e produtividade</h2></div><span>${data.daySpan} ${data.daySpan === 1 ? 'dia analisado' : 'dias analisados'}</span></header><div class="report-priority-grid"><article class="report-priority-card is-primary"><div><span>Lucro total</span><span class="report-priority-icon">↗</span></div><strong>${brl.format(data.totalProfit)}</strong><small>Receita menos custos diretos de produtos e serviços</small></article><article class="report-priority-card"><div><span>Lucro médio /serviço</span><span class="report-priority-icon">⌁</span></div><strong>${percent(data.averageServiceMargin)}</strong><small>${data.averageServiceMargin == null ? 'Cadastre o custo estimado dos serviços' : `${data.serviceCount} serviços concluídos`}</small></article><article class="report-priority-card"><div><span>Lucro médio /produto</span><span class="report-priority-icon">◇</span></div><strong>${percent(data.averageProductMargin)}</strong><small>${data.productCount} unidades vendidas</small></article><article class="report-priority-card"><div><span>Serviços /dia</span><span class="report-priority-icon">◷</span></div><strong>${daily(data.servicesPerDay)}</strong><small>Média diária de serviços entregues</small></article><article class="report-priority-card"><div><span>Produtos /dia</span><span class="report-priority-icon">＋</span></div><strong>${daily(data.productsPerDay)}</strong><small>Média diária de unidades vendidas</small></article></div></section>
+    <div class="stats-grid report-support-grid">${statCard('FATURAMENTO TOTAL', brl.format(data.revenue), '↗', `${data.sales.length} vendas · ${data.delivered.length} ordens entregues`)}${statCard('RESULTADO LÍQUIDO', brl.format(data.grossProfit), '◈', `${margin}% de margem após custos e despesas`)}${statCard('A RECEBER', brl.format(sum(openReceivables, 'value')), '⌁', `${openReceivables.length} ordens com valor definido`)}${statCard('DESPESAS PAGAS', brl.format(data.expenses), '↘', `${data.paidPayables.length} pagamentos no período`)}</div>
     <div class="reports-grid"><section class="card report-chart"><header class="card-header"><div><p class="eyebrow">EVOLUÇÃO</p><h2>Faturamento diário</h2></div><strong class="money">${brl.format(buckets.reduce((total, bucket) => total + bucket.total, 0))}</strong></header><div class="chart-bars">${buckets.map(bucket => `<div class="chart-bar" title="${formatDate(bucket.date)}: ${brl.format(bucket.total)}"><span class="chart-bar-value">${bucket.total ? brl.format(bucket.total) : ''}</span><div class="chart-bar-track"><i class="chart-bar-fill" style="height:${bucket.total ? Math.max(Math.round(bucket.total / maxBucket * 100), 5) : 2}%"></i></div><small>${String(bucket.date).slice(8)}</small></div>`).join('')}</div><div class="chart-caption">Vendas de produtos e ordens entregues nos últimos ${chartDays} dias.</div></section>
-    <section class="card report-summary"><header class="card-header"><div><p class="eyebrow">RESULTADO</p><h2>Composição financeira</h2></div></header><div class="report-breakdown"><div class="breakdown-row"><span>Vendas de produtos</span><strong>${brl.format(data.salesRevenue)}</strong></div><div class="breakdown-row"><span>Serviços entregues</span><strong>${brl.format(data.serviceRevenue)}</strong></div><div class="breakdown-row is-negative"><span>Custo dos produtos vendidos</span><strong>− ${brl.format(data.costOfSales)}</strong></div><div class="breakdown-row is-negative"><span>Despesas pagas</span><strong>− ${brl.format(data.expenses)}</strong></div><div class="breakdown-row is-total"><span>Resultado líquido</span><strong>${brl.format(data.grossProfit)}</strong></div></div></section>
+    <section class="card report-summary"><header class="card-header"><div><p class="eyebrow">RESULTADO</p><h2>Composição financeira</h2></div></header><div class="report-breakdown"><div class="breakdown-row"><span>Vendas de produtos</span><strong>${brl.format(data.salesRevenue)}</strong></div><div class="breakdown-row"><span>Serviços entregues</span><strong>${brl.format(data.serviceRevenue)}</strong></div><div class="breakdown-row is-negative"><span>Custo dos produtos vendidos</span><strong>− ${brl.format(data.costOfSales)}</strong></div><div class="breakdown-row is-negative"><span>Custo dos serviços</span><strong>− ${brl.format(data.serviceCosts)}</strong></div><div class="breakdown-row"><span>Lucro total</span><strong>${brl.format(data.totalProfit)}</strong></div><div class="breakdown-row is-negative"><span>Despesas pagas</span><strong>− ${brl.format(data.expenses)}</strong></div><div class="breakdown-row is-total"><span>Resultado líquido</span><strong>${brl.format(data.grossProfit)}</strong></div></div></section>
     <section class="card report-section"><header class="card-header"><div><p class="eyebrow">PAGAMENTOS</p><h2>Como seus clientes pagam</h2></div></header>${renderBreakdown(paymentTotals, data.salesRevenue, 'Nenhuma venda no período', 'As formas de pagamento aparecerão após as primeiras vendas.')}</section>
     <section class="card report-section"><header class="card-header"><div><p class="eyebrow">ASSISTÊNCIA</p><h2>Serviços mais procurados</h2></div></header>${renderBreakdown(services.map(service => ({ label: service.name, amount: service.value, count: service.count })), Math.max(...services.map(service => service.value), 1), 'Nenhuma ordem no período', 'As ordens de serviço alimentarão este ranking.')}</section>
     <section class="card report-section"><header class="card-header"><div><p class="eyebrow">PRODUTOS</p><h2>Categorias mais vendidas</h2></div></header>${renderBreakdown(categories, Math.max(...categories.map(category => category.amount), 1), 'Nenhum produto vendido', 'As vendas do caixa alimentarão este indicador.')}</section>
@@ -1504,6 +1538,7 @@ function serviceModal(service = {}) {
     <div class="field"><label>CATEGORIA *</label><input name="category" required value="${esc(service.category)}" placeholder="Tela, bateria, placa..."></div>
     <div class="field"><label>FORMA DE PREÇO *</label><select name="pricing" id="pricing-select"><option value="fixed" ${service.pricing!=='quote'?'selected':''}>Preço fixo</option><option value="quote" ${service.pricing==='quote'?'selected':''}>Valor a consultar</option></select></div>
     <div class="field" id="price-field"><label>PREÇO FIXO (R$)</label><input name="price" type="number" min="0" step="0.01" value="${service.price??''}"></div>
+    <div class="field"><label>CUSTO ESTIMADO (R$)</label><input name="cost" type="number" min="0" step="0.01" value="${service.cost??''}" placeholder="Peças e insumos"><small class="field-help">Usado no cálculo de lucro e margem do serviço.</small></div>
     <div class="field"><label>DURAÇÃO ESTIMADA (MIN) *</label><input name="duration" type="number" min="1" required value="${service.duration??60}"></div>
     <div class="field full"><label><input name="active" type="checkbox" style="width:auto;height:auto" ${service.active!==false?'checked':''}> Serviço ativo para novas ordens</label></div>
     ${formActions(service.id?'Salvar alterações':'Cadastrar serviço')}</form>`);
@@ -1514,7 +1549,7 @@ function serviceModal(service = {}) {
   }; toggle(); document.querySelector('#pricing-select').addEventListener('change',toggle);
   document.querySelector('#service-form').addEventListener('submit',e=>{
     e.preventDefault(); const fd=new FormData(e.target), data=Object.fromEntries(fd); const pricing=data.pricing;
-    const record={id:service.id||uid('s'),name:data.name.trim(),category:data.category.trim(),pricing,price:pricing==='fixed'?Number(data.price||0):null,duration:Number(data.duration),active:fd.has('active')};
+    const record={id:service.id||uid('s'),name:data.name.trim(),category:data.category.trim(),pricing,price:pricing==='fixed'?Number(data.price||0):null,cost:data.cost===''?null:Number(data.cost),duration:Number(data.duration),active:fd.has('active')};
     if(service.id) state.services=state.services.map(x=>x.id===service.id?record:x); else state.services.unshift(record);
     recordActivity('service', `${service.id ? 'Atualizado' : 'Cadastrado'}: ${record.name}`);
     saveState();closeModal();navigate('services');toast(service.id?'Serviço atualizado.':'Serviço cadastrado.','success');
@@ -1568,7 +1603,9 @@ function orderModal(order = {}) {
       state.customers.unshift(customer);
     }
     const status = order.id ? data.status : 'analysis';
-    const record = { id: order.id || `OS-${next}`, customerId: customer.id, customer: data.customer.trim(), customerDocument: formatCpfCnpj(order.customerDocument || customer.document || ''), phone: data.phone.trim(), attendanceType: needsAddress ? 'pickup_return' : 'in_store_service', deliveryAddress: address ? { ...address } : null, device: data.device.trim(), imei, issue: data.issue.trim(), serviceId: data.serviceId, value: data.value === '' ? null : Number(data.value), status, createdAt: order.createdAt || isoToday(), dueAt: data.dueAt, reminderAt: data.reminderAt, reminder: data.reminder.trim(), deliveredAt: status === 'delivered' ? order.deliveredAt || new Date().toISOString() : '', warrantyDays: Number(order.warrantyDays ?? state.settings.warrantyDays ?? 0), warrantyNotes: order.warrantyNotes || state.settings.orderNotes || '' };
+    const selectedService = state.services.find(service => service.id === data.serviceId);
+    const serviceCost = order.id && order.serviceId === data.serviceId && order.serviceCost != null ? Number(order.serviceCost) : selectedService?.cost == null ? null : Number(selectedService.cost);
+    const record = { id: order.id || `OS-${next}`, customerId: customer.id, customer: data.customer.trim(), customerDocument: formatCpfCnpj(order.customerDocument || customer.document || ''), phone: data.phone.trim(), attendanceType: needsAddress ? 'pickup_return' : 'in_store_service', deliveryAddress: address ? { ...address } : null, device: data.device.trim(), imei, issue: data.issue.trim(), serviceId: data.serviceId, serviceCost, value: data.value === '' ? null : Number(data.value), status, createdAt: order.createdAt || isoToday(), dueAt: data.dueAt, reminderAt: data.reminderAt, reminder: data.reminder.trim(), deliveredAt: status === 'delivered' ? order.deliveredAt || new Date().toISOString() : '', warrantyDays: Number(order.warrantyDays ?? state.settings.warrantyDays ?? 0), warrantyNotes: order.warrantyNotes || state.settings.orderNotes || '' };
     if (order.id) state.orders = state.orders.map(item => item.id === order.id ? record : item);
     else state.orders.unshift(record);
     syncRepairDeliveries(record, customer, address);

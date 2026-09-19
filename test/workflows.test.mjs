@@ -876,7 +876,7 @@ test('o relatório calcula faturamento, custos, despesas e resultado líquido', 
       { id: 'venda-antiga', payment: 'cash', status: 'paid', total: 70, createdAt: old + 'T11:00:00', items: [{ productId: 'produto-cabo', name: 'Cabo', quantity: 1, unitPrice: 70, cost: 12 }] }
     ],
     orders: [
-      { id: 'OS-400', customer: 'Cliente de Teste', customerId: 'cliente-teste', device: 'Aparelho', serviceId: 'servico-tela', status: 'delivered', value: 250, createdAt: today, deliveredAt: today + 'T15:00:00', dueAt: today },
+      { id: 'OS-400', customer: 'Cliente de Teste', customerId: 'cliente-teste', device: 'Aparelho', serviceId: 'servico-tela', serviceCost: 100, status: 'delivered', value: 250, createdAt: today, deliveredAt: today + 'T15:00:00', dueAt: today },
       { id: 'OS-401', customer: 'Cliente de Teste', customerId: 'cliente-teste', device: 'Outro aparelho', serviceId: 'servico-tela', status: 'progress', value: 75, createdAt: today, dueAt: dateOffset(1) },
       { id: 'OS-402', customer: 'Cliente de Teste', customerId: 'cliente-teste', device: 'Aparelho cancelado', serviceId: 'servico-tela', status: 'cancelled', value: 700, createdAt: today, dueAt: today }
     ],
@@ -895,14 +895,25 @@ test('o relatório calcula faturamento, custos, despesas e resultado líquido', 
   assert.equal(data.salesRevenue, 150);
   assert.equal(data.serviceRevenue, 250);
   assert.equal(data.costOfSales, 40);
+  assert.equal(data.serviceCosts, 100);
   assert.equal(data.expenses, 30);
   assert.equal(data.revenue, 400);
-  assert.equal(data.grossProfit, 330);
+  assert.equal(data.totalProfit, 260);
+  assert.equal(data.grossProfit, 230);
+  assert.equal(Math.round(data.averageServiceMargin * 1000) / 10, 60);
+  assert.equal(Math.round(data.averageProductMargin * 1000) / 10, 73.3);
+  assert.equal(data.servicesPerDay, 1);
+  assert.equal(data.productsPerDay, 2);
 
   api.renderReports();
 
   assert.match(document.querySelector('#app-content').innerHTML, /A RECEBER/u);
   assert.match(document.querySelector('#app-content').innerHTML, /75,00/u);
+  assert.match(document.querySelector('#app-content').innerHTML, /Lucro total/u);
+  assert.match(document.querySelector('#app-content').innerHTML, /Lucro médio \/serviço/u);
+  assert.match(document.querySelector('#app-content').innerHTML, /Lucro médio \/produto/u);
+  assert.match(document.querySelector('#app-content').innerHTML, /Serviços \/dia/u);
+  assert.match(document.querySelector('#app-content').innerHTML, /Produtos \/dia/u);
   assert.doesNotMatch(document.querySelector('#app-content').innerHTML, /EM BREVE/iu);
 });
 
