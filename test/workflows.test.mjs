@@ -22,7 +22,7 @@ const exposedApplication = application.slice(0, bootstrap) + '\n' + [
   '  esc, normalize, initials, sum,',
   '  formatPostalCode, normalizeAddress, removeCustomerAddressData, formatAddress, validateAddress,',
   '  localDate, offsetDate, formatDate, formatDateTime,',
-  '  formatCnpj, isValidCnpj, formatFileSize, validateCompanyDocument,',
+  '  formatCnpj, isValidCnpj, formatCpfCnpj, isValidCpf, isValidCpfCnpj, formatFileSize, validateCompanyDocument,',
   '  companyDocumentStorageAvailable,',
   '  saveCompanyDocument, readCompanyDocument, deleteCompanyDocument,',
   '  renderCompanyDocuments, handleCompanyDocumentUpload,',
@@ -557,7 +557,9 @@ test('produtos inexistentes não são inseridos no carrinho', () => {
 });
 
 test('uma venda completa calcula desconto, baixa o estoque e persiste os dados na nuvem', async () => {
-  const { api, remoteState, writes, messages, document } = createApplication();
+  const stored = fixture();
+  stored.customers[0].document = '529.982.247-25';
+  const { api, remoteState, writes, messages, document } = createApplication({ stored });
 
   api.addCartProduct('produto-capa');
   api.addCartProduct('produto-capa');
@@ -574,6 +576,9 @@ test('uma venda completa calcula desconto, baixa o estoque e persiste os dados n
 
   assert.equal(sale.customerId, 'cliente-teste');
   assert.equal(sale.customer, 'Cliente de Teste');
+  assert.equal(sale.customerDocument, '529.982.247-25');
+  assert.equal(sale.customerPhone, '(11) 99999-0000');
+  assert.equal(sale.warrantyDays, 90);
   assert.equal(sale.subtotal, 155);
   assert.equal(sale.discount, 15);
   assert.equal(sale.total, 140);
@@ -595,6 +600,17 @@ test('uma venda completa calcula desconto, baixa o estoque e persiste os dados n
   assert.equal(saved.stockMovements.length, 2);
   assert.match(document.querySelector('#app-content').innerHTML, /Últimas vendas/u);
   assert.match(messages().at(-1).textContent, /Venda concluída/u);
+});
+
+test('CPF e CNPJ são formatados e validados para documentos comerciais', () => {
+  const { api } = createApplication();
+
+  assert.equal(api.formatCpfCnpj('52998224725'), '529.982.247-25');
+  assert.equal(api.formatCpfCnpj('11222333000181'), '11.222.333/0001-81');
+  assert.equal(api.isValidCpfCnpj('529.982.247-25'), true);
+  assert.equal(api.isValidCpfCnpj('11.222.333/0001-81'), true);
+  assert.equal(api.isValidCpfCnpj('111.111.111-11'), false);
+  assert.equal(api.isValidCpfCnpj('11.111.111/1111-11'), false);
 });
 
 test('o desconto nunca ultrapassa o subtotal nem produz valor negativo', () => {

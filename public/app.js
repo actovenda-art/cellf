@@ -73,6 +73,7 @@ const seed = {
   appointments: [],
   stockMovements: [],
   activity: [],
+  issuedDocuments: [],
   companyDocuments: [],
   settings: {
     companyName: 'Cellf',
@@ -148,6 +149,7 @@ function loadState(source = null) {
       appointments: Array.isArray(stored.appointments) ? stored.appointments : [],
       stockMovements: Array.isArray(stored.stockMovements) ? stored.stockMovements : [],
       activity: Array.isArray(stored.activity) ? stored.activity : [],
+      issuedDocuments: Array.isArray(stored.issuedDocuments) ? stored.issuedDocuments : [],
       companyDocuments: Array.isArray(stored.companyDocuments) ? stored.companyDocuments : [],
       settings: { ...seed.settings, ...(stored.settings && typeof stored.settings === 'object' ? stored.settings : {}) }
     };
@@ -378,6 +380,30 @@ function formatCnpj(value = '') {
     .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
     .replace(/\.(\d{3})(\d)/, '.$1/$2')
     .replace(/(\d{4})(\d)/, '$1-$2');
+}
+function formatCpfCnpj(value = '') {
+  const digits = String(value).replace(/\D/g, '').slice(0, 14);
+  if (digits.length <= 11) {
+    return digits
+      .replace(/^(\d{3})(\d)/, '$1.$2')
+      .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+      .replace(/\.(\d{3})(\d)/, '.$1-$2');
+  }
+  return formatCnpj(digits);
+}
+function isValidCpf(value = '') {
+  const digits = String(value).replace(/\D/g, '');
+  if (digits.length !== 11 || /^(\d)\1{10}$/.test(digits)) return false;
+  const verifier = length => {
+    const total = digits.slice(0, length).split('').reduce((sum, digit, index) => sum + Number(digit) * (length + 1 - index), 0);
+    const remainder = (total * 10) % 11;
+    return remainder === 10 ? 0 : remainder;
+  };
+  return verifier(9) === Number(digits[9]) && verifier(10) === Number(digits[10]);
+}
+function isValidCpfCnpj(value = '') {
+  const digits = String(value).replace(/\D/g, '');
+  return digits.length === 11 ? isValidCpf(digits) : digits.length === 14 ? isValidCnpj(digits) : false;
 }
 function isValidCnpj(value = '') {
   const digits = String(value).replace(/\D/g, '');
@@ -746,7 +772,7 @@ function renderSales() {
       </section>
       <aside class="card pos-cart"><header class="card-header"><div><p class="eyebrow">CAIXA</p><h2>Venda atual</h2></div>${cart.items.length ? '<button class="text-button" data-action="clear-cart">Limpar</button>' : ''}</header>
         <div class="pos-cart-content">${cart.items.length ? cart.items.map(item => `<div class="cart-item"><div class="cart-item-info"><strong>${esc(item.name)}</strong><small>${brl.format(item.unitPrice)} cada</small></div><div class="cart-item-actions"><button class="icon-action" data-action="cart-decrease" data-id="${esc(item.productId)}" aria-label="Diminuir quantidade">−</button><strong>${item.quantity}</strong><button class="icon-action" data-action="cart-increase" data-id="${esc(item.productId)}" aria-label="Aumentar quantidade">＋</button></div><strong class="money">${brl.format(item.quantity * item.unitPrice)}</strong></div>`).join('') : emptyState('Sua venda começa aqui', 'Escolha produtos ao lado para adicionar ao carrinho.')}
-          ${cart.items.length ? `<div class="cart-fields"><div class="field"><label for="sale-attendance-type">TIPO DE ATENDIMENTO</label><select id="sale-attendance-type" data-action="sale-attendance-type"><option value="counter_sale" ${!deliverySale ? 'selected' : ''}>${ATTENDANCE_LABELS.counter_sale}</option><option value="delivery" ${deliverySale ? 'selected' : ''}>${ATTENDANCE_LABELS.delivery}</option></select></div><div class="field"><label for="sale-customer">CLIENTE${deliverySale ? ' *' : ''}</label><select id="sale-customer" data-action="sale-customer"><option value="">${deliverySale ? 'Selecione o cliente da entrega' : 'Cliente de balcão'}</option>${activeCustomers.map(customer => `<option value="${esc(customer.id)}" ${customer.id === cart.customerId ? 'selected' : ''}>${esc(customer.name)}</option>`).join('')}</select></div>${deliverySale ? `<section class="sale-delivery-address"><div class="address-form-heading"><h3>Endereço deste pedido</h3><p>Informado somente nesta entrega, sem alterar o cadastro do cliente.</p></div><div class="form-grid sale-address-grid">${addressFieldsMarkup(cart.deliveryAddress || {}, { required: true, action: 'sale-address-field' })}</div></section>` : ''}<div class="field"><label for="sale-payment">FORMA DE PAGAMENTO</label><select id="sale-payment" data-action="sale-payment">${Object.entries(PAYMENT_LABELS).map(([value, label]) => `<option value="${value}" ${value === cart.payment ? 'selected' : ''}>${label}</option>`).join('')}</select></div><div class="field"><label for="sale-discount">DESCONTO (R$)</label><input id="sale-discount" data-action="sale-discount" type="number" min="0" step="0.01" value="${cart.discount || ''}" placeholder="0,00"></div></div>
+          ${cart.items.length ? `<div class="cart-fields"><div class="field"><label for="sale-attendance-type">TIPO DE ATENDIMENTO</label><select id="sale-attendance-type" data-action="sale-attendance-type"><option value="counter_sale" ${!deliverySale ? 'selected' : ''}>${ATTENDANCE_LABELS.counter_sale}</option><option value="delivery" ${deliverySale ? 'selected' : ''}>${ATTENDANCE_LABELS.delivery}</option></select></div><div class="field"><label for="sale-customer">CLIENTE${deliverySale ? ' *' : ''}</label><select id="sale-customer" data-action="sale-customer"><option value="">${deliverySale ? 'Selecione o cliente da entrega' : 'Cliente de balcão'}</option>${activeCustomers.map(customer => `<option value="${esc(customer.id)}" ${customer.id === cart.customerId ? 'selected' : ''}>${esc(customer.name)}${customer.document ? ` · ${esc(formatCpfCnpj(customer.document))}` : ''}</option>`).join('')}</select><small class="field-help">Selecione um cliente com CPF/CNPJ para emitir comprovante, recibo e garantia nominais.</small></div>${deliverySale ? `<section class="sale-delivery-address"><div class="address-form-heading"><h3>Endereço deste pedido</h3><p>Informado somente nesta entrega, sem alterar o cadastro do cliente.</p></div><div class="form-grid sale-address-grid">${addressFieldsMarkup(cart.deliveryAddress || {}, { required: true, action: 'sale-address-field' })}</div></section>` : ''}<div class="field"><label for="sale-payment">FORMA DE PAGAMENTO</label><select id="sale-payment" data-action="sale-payment">${Object.entries(PAYMENT_LABELS).map(([value, label]) => `<option value="${value}" ${value === cart.payment ? 'selected' : ''}>${label}</option>`).join('')}</select></div><div class="field"><label for="sale-discount">DESCONTO (R$)</label><input id="sale-discount" data-action="sale-discount" type="number" min="0" step="0.01" value="${cart.discount || ''}" placeholder="0,00"></div></div>
           <div class="cart-summary"><div><span>Subtotal</span><strong>${brl.format(cartSubtotal())}</strong></div><div><span>Desconto</span><strong>− ${brl.format(Math.min(Number(cart.discount || 0), cartSubtotal()))}</strong></div><div class="cart-total"><span>Total a receber</span><strong>${brl.format(cartTotal())}</strong></div></div><button class="primary-button pos-checkout" data-action="complete-sale">✓ Finalizar venda</button>` : ''}
         </div>
       </aside>
@@ -805,6 +831,8 @@ function completeSale() {
     id: uid('v'),
     customerId: customer?.id || '',
     customer: customer?.name || 'Cliente de balcão',
+    customerDocument: formatCpfCnpj(customer?.document || ''),
+    customerPhone: customer?.phone || '',
     items: cart.items.map(item => ({ ...item })),
     subtotal: cartSubtotal(),
     discount: Math.min(Number(cart.discount || 0), cartSubtotal()),
@@ -813,6 +841,8 @@ function completeSale() {
     attendanceType: deliverySale ? 'delivery' : 'counter_sale',
     deliveryAddress: deliveryAddress ? { ...deliveryAddress } : null,
     status: 'paid',
+    warrantyDays: Number(state.settings.warrantyDays || 0),
+    warrantyNotes: state.settings.orderNotes || '',
     createdAt: new Date().toISOString()
   };
 
@@ -834,7 +864,89 @@ function completeSale() {
 
 function viewSale(sale) {
   if (!sale) return;
-  openModal(sale.id.toUpperCase(), 'COMPROVANTE DE VENDA', `<div class="receipt"><div class="detail-grid"><div class="field"><label>CLIENTE</label><strong>${esc(sale.customer)}</strong></div><div class="field"><label>DATA E HORA</label><strong>${formatDateTime(sale.createdAt)}</strong></div><div class="field"><label>ATENDIMENTO</label><strong>${esc(ATTENDANCE_LABELS[sale.attendanceType] || ATTENDANCE_LABELS.counter_sale)}</strong></div><div class="field"><label>PAGAMENTO</label><strong>${esc(PAYMENT_LABELS[sale.payment] || sale.payment)}</strong></div><div class="field"><label>STATUS</label><span class="status paid">Pagamento confirmado</span></div></div>${sale.deliveryAddress ? `<div class="detail-section address-detail-section"><h3>Endereço de entrega</h3><p>${esc(formatAddress(sale.deliveryAddress))}</p>${sale.deliveryAddress.reference ? `<small>Referência: ${esc(sale.deliveryAddress.reference)}</small>` : ''}</div>` : ''}<div class="detail-section"><h3>Itens da venda</h3>${sale.items.map(item => `<div class="cart-item"><div class="cart-item-info"><strong>${esc(item.name)}</strong><small>${item.quantity} × ${brl.format(item.unitPrice)}</small></div><strong class="money">${brl.format(item.quantity * item.unitPrice)}</strong></div>`).join('')}</div><div class="cart-summary"><div><span>Subtotal</span><strong>${brl.format(sale.subtotal)}</strong></div><div><span>Desconto</span><strong>− ${brl.format(sale.discount)}</strong></div><div class="cart-total"><span>Total pago</span><strong>${brl.format(sale.total)}</strong></div></div><div class="form-actions"><button class="ghost-button" data-action="close-modal">Fechar</button></div></div>`);
+  const customer = transactionCustomer(sale);
+  openModal(sale.id.toUpperCase(), 'COMPROVANTE DE VENDA', `<div class="receipt"><div class="detail-grid"><div class="field"><label>CLIENTE</label><strong>${esc(sale.customer)}</strong></div><div class="field"><label>CPF / CNPJ</label><strong>${esc(customer.document || 'Não informado')}</strong></div><div class="field"><label>DATA E HORA</label><strong>${formatDateTime(sale.createdAt)}</strong></div><div class="field"><label>ATENDIMENTO</label><strong>${esc(ATTENDANCE_LABELS[sale.attendanceType] || ATTENDANCE_LABELS.counter_sale)}</strong></div><div class="field"><label>PAGAMENTO</label><strong>${esc(PAYMENT_LABELS[sale.payment] || sale.payment)}</strong></div><div class="field"><label>STATUS</label><span class="status paid">Pagamento confirmado</span></div></div>${sale.deliveryAddress ? `<div class="detail-section address-detail-section"><h3>Endereço de entrega</h3><p>${esc(formatAddress(sale.deliveryAddress))}</p>${sale.deliveryAddress.reference ? `<small>Referência: ${esc(sale.deliveryAddress.reference)}</small>` : ''}</div>` : ''}<div class="detail-section"><h3>Itens da venda</h3>${sale.items.map(item => `<div class="cart-item"><div class="cart-item-info"><strong>${esc(item.name)}</strong><small>${item.quantity} × ${brl.format(item.unitPrice)}</small></div><strong class="money">${brl.format(item.quantity * item.unitPrice)}</strong></div>`).join('')}</div><div class="cart-summary"><div><span>Subtotal</span><strong>${brl.format(sale.subtotal)}</strong></div><div><span>Desconto</span><strong>− ${brl.format(sale.discount)}</strong></div><div class="cart-total"><span>Total pago</span><strong>${brl.format(sale.total)}</strong></div></div><div class="form-actions"><button class="ghost-button" data-action="close-modal">Fechar</button><button class="ghost-button" data-action="print-sale-receipt" data-id="${esc(sale.id)}">Emitir recibo</button><button class="ghost-button" data-action="print-sale-warranty" data-id="${esc(sale.id)}">Emitir garantia</button><button class="primary-button" data-action="print-sale-proof" data-id="${esc(sale.id)}">Imprimir comprovante</button></div></div>`);
+}
+
+function transactionCustomer(record = {}) {
+  const customer = state.customers.find(entry => entry.id === record.customerId);
+  return {
+    name: record.customer || customer?.name || 'Cliente de balcão',
+    document: formatCpfCnpj(record.customerDocument || customer?.document || ''),
+    phone: record.customerPhone || record.phone || customer?.phone || ''
+  };
+}
+
+function requireDocumentCustomer(record) {
+  const customer = transactionCustomer(record);
+  if (!isValidCpfCnpj(customer.document)) {
+    toast('Cadastre um CPF ou CNPJ válido no cliente antes de emitir o documento.', 'error');
+    return null;
+  }
+  return customer;
+}
+
+function datePlusDays(value, days = 0) {
+  const date = new Date(value || Date.now());
+  if (Number.isNaN(date.valueOf())) return '';
+  date.setDate(date.getDate() + Number(days || 0));
+  return localDate(date);
+}
+
+function registerDocumentIssue(type, sourceId, customer) {
+  state.issuedDocuments.unshift({ id: uid('doc'), type, sourceId, customer: customer.name, customerDocument: customer.document, createdAt: new Date().toISOString() });
+  state.issuedDocuments = state.issuedDocuments.slice(0, 500);
+  recordActivity('document', `${type} emitido · ${String(sourceId).toUpperCase()} · ${customer.name}`);
+  saveState();
+}
+
+function openPrintableDocument({ title, number, customer, issuedAt, body, total = '', notes = '' }) {
+  const popup = window.open('', '_blank', 'width=920,height=760');
+  if (!popup) {
+    toast('O navegador bloqueou a janela de impressão. Permita pop-ups para este site.', 'error');
+    return false;
+  }
+  popup.opener = null;
+  const company = state.settings;
+  const companyLocation = [company.address, company.city, company.postalCode ? `CEP ${company.postalCode}` : ''].filter(Boolean).join(' · ');
+  popup.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(title)} ${esc(number)}</title><style>*{box-sizing:border-box}body{font:14px/1.5 Arial,sans-serif;color:#111;margin:0;background:#f3f6f8}.sheet{width:210mm;min-height:270mm;margin:16px auto;padding:18mm;background:#fff}.brand{display:flex;justify-content:space-between;gap:24px;padding-bottom:18px;border-bottom:3px solid #129cff}.brand h1{font-size:30px;margin:0}.brand p,.muted{color:#5b6570;margin:3px 0}.document-title{display:flex;justify-content:space-between;align-items:end;margin:28px 0 18px}.document-title h2{font-size:22px;margin:0}.number{font-weight:700;color:#0877c9}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}.box{border:1px solid #dbe2e8;border-radius:10px;padding:12px}.box small{display:block;color:#66727c;text-transform:uppercase;letter-spacing:.08em}.box strong{display:block;margin-top:4px}.content{margin:22px 0}.content table{width:100%;border-collapse:collapse}.content th,.content td{padding:10px 8px;border-bottom:1px solid #dde3e8;text-align:left}.content th:last-child,.content td:last-child{text-align:right}.total{margin:20px 0 0 auto;width:48%;padding:14px;border-radius:10px;background:#edf8ff;font-size:18px;display:flex;justify-content:space-between}.notes{margin-top:24px;padding:14px;border-left:4px solid #129cff;background:#f7fafc;white-space:pre-line}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:50px;margin-top:70px;text-align:center}.signature{border-top:1px solid #222;padding-top:8px}.footer{margin-top:45px;border-top:1px solid #dbe2e8;padding-top:12px;color:#66727c;font-size:12px}@media print{body{background:#fff}.sheet{margin:0;width:auto;min-height:auto;padding:10mm}@page{size:A4;margin:0}}</style></head><body><main class="sheet"><header class="brand"><div><h1>${esc(company.companyName || 'Cellf')}</h1><p>${esc(company.slogan || 'Reparo e Comércio')}</p></div><div><strong>${esc(company.legalName || '')}</strong><p>${esc(company.document ? `CNPJ ${company.document}` : '')}</p><p>${esc(company.phone || '')}</p></div></header><section class="document-title"><div><p class="muted">DOCUMENTO COMERCIAL</p><h2>${esc(title)}</h2></div><span class="number">Nº ${esc(number)}</span></section><section class="grid"><div class="box"><small>Cliente</small><strong>${esc(customer.name)}</strong></div><div class="box"><small>CPF / CNPJ</small><strong>${esc(customer.document)}</strong></div><div class="box"><small>Emissão</small><strong>${esc(formatDateTime(issuedAt || new Date().toISOString()))}</strong></div><div class="box"><small>Telefone</small><strong>${esc(customer.phone || 'Não informado')}</strong></div></section><section class="content">${body}</section>${total ? `<div class="total"><span>Total</span><strong>${esc(total)}</strong></div>` : ''}${notes ? `<div class="notes">${esc(notes)}</div>` : ''}<section class="signatures"><div class="signature">${esc(customer.name)}</div><div class="signature">${esc(company.companyName || 'Cellf')}</div></section><footer class="footer">${esc(companyLocation)}${company.email ? ` · ${esc(company.email)}` : ''}<br>Documento emitido pelo sistema Cellf.</footer></main><script>window.addEventListener('load',()=>{window.focus();window.print();});<\/script></body></html>`);
+  popup.document.close();
+  return true;
+}
+
+function printSaleDocument(sale, type) {
+  if (!sale) return;
+  const customer = requireDocumentCustomer(sale);
+  if (!customer) return;
+  const number = sale.id.toUpperCase();
+  const items = `<table><thead><tr><th>Item</th><th>Qtd.</th><th>Valor</th></tr></thead><tbody>${sale.items.map(item => `<tr><td>${esc(item.name)}</td><td>${Number(item.quantity)}</td><td>${esc(brl.format(item.quantity * item.unitPrice))}</td></tr>`).join('')}</tbody></table>`;
+  let payload;
+  if (type === 'recibo') payload = { title: 'Recibo', number: `REC-${number}`, customer, issuedAt: new Date().toISOString(), body: `<p>Recebemos de <strong>${esc(customer.name)}</strong>, CPF/CNPJ ${esc(customer.document)}, o valor referente à venda ${esc(number)}, pago por ${esc(PAYMENT_LABELS[sale.payment] || sale.payment)}.</p>${items}`, total: brl.format(sale.total), notes: 'Este recibo comprova o recebimento do valor indicado.' };
+  else if (type === 'garantia') {
+    const days = Number(sale.warrantyDays ?? state.settings.warrantyDays ?? 0);
+    payload = { title: 'Termo de garantia', number: `GAR-${number}`, customer, issuedAt: new Date().toISOString(), body: `${items}<div class="grid"><div class="box"><small>Início da garantia</small><strong>${esc(formatDate(sale.createdAt))}</strong></div><div class="box"><small>Validade</small><strong>${esc(formatDate(datePlusDays(sale.createdAt, days)))}</strong></div></div>`, total: '', notes: sale.warrantyNotes || state.settings.orderNotes || `Garantia de ${days} dias.` };
+  } else payload = { title: 'Comprovante de venda', number, customer, issuedAt: sale.createdAt, body: `${items}<div class="grid"><div class="box"><small>Pagamento</small><strong>${esc(PAYMENT_LABELS[sale.payment] || sale.payment)}</strong></div><div class="box"><small>Atendimento</small><strong>${esc(ATTENDANCE_LABELS[sale.attendanceType] || ATTENDANCE_LABELS.counter_sale)}</strong></div></div>`, total: brl.format(sale.total), notes: sale.deliveryAddress ? `Endereço de entrega: ${formatAddress(sale.deliveryAddress)}` : '' };
+  if (openPrintableDocument(payload)) {
+    registerDocumentIssue(type === 'garantia' ? 'Garantia de venda' : type === 'recibo' ? 'Recibo de venda' : 'Comprovante de venda', sale.id, customer);
+    toast('Documento preparado para impressão.');
+  }
+}
+
+function printOrderDocument(order, type) {
+  if (!order) return;
+  const customer = requireDocumentCustomer(order);
+  if (!customer) return;
+  const service = serviceName(order.serviceId);
+  const days = Number(order.warrantyDays ?? state.settings.warrantyDays ?? 0);
+  const warrantyStart = order.deliveredAt || new Date().toISOString();
+  const facts = `<div class="grid"><div class="box"><small>Aparelho</small><strong>${esc(order.device)}</strong></div><div class="box"><small>IMEI</small><strong>${esc(order.imei || 'Não informado')}</strong></div><div class="box"><small>Serviço</small><strong>${esc(service)}</strong></div><div class="box"><small>Ordem de serviço</small><strong>${esc(order.id)}</strong></div></div><p><strong>Defeito relatado:</strong> ${esc(order.issue)}</p>`;
+  const payload = type === 'garantia'
+    ? { title: 'Termo de garantia de serviço', number: `GAR-${order.id}`, customer, issuedAt: new Date().toISOString(), body: `${facts}<div class="grid"><div class="box"><small>Início da garantia</small><strong>${esc(formatDate(warrantyStart))}</strong></div><div class="box"><small>Validade</small><strong>${esc(formatDate(datePlusDays(warrantyStart, days)))}</strong></div></div>`, notes: order.warrantyNotes || state.settings.orderNotes || `Garantia de ${days} dias.` }
+    : { title: 'Recibo de serviço', number: `REC-${order.id}`, customer, issuedAt: new Date().toISOString(), body: `<p>Recebemos de <strong>${esc(customer.name)}</strong>, CPF/CNPJ ${esc(customer.document)}, o valor referente ao serviço abaixo.</p>${facts}`, total: brl.format(Number(order.value || 0)), notes: 'Este recibo comprova o recebimento do valor indicado.' };
+  if (openPrintableDocument(payload)) {
+    registerDocumentIssue(type === 'garantia' ? 'Garantia de serviço' : 'Recibo de serviço', order.id, customer);
+    toast('Documento preparado para impressão.');
+  }
 }
 
 function agendaEvents(date) {
@@ -1319,7 +1431,12 @@ function closeModal() {
 function formActions(label='Salvar cadastro') { return `<div class="form-actions"><button type="button" class="ghost-button" data-action="close-modal">Cancelar</button><button class="primary-button" type="submit">${label}</button></div>`; }
 
 function customerModal(customer = {}) {
-  openModal(customer.id ? 'Editar cliente' : 'Novo cliente', 'RELACIONAMENTO', `<form id="customer-form" class="form-grid"><div class="field full"><label>NOME COMPLETO *</label><input name="name" required value="${esc(customer.name)}" placeholder="Nome completo do cliente"></div><div class="field"><label>TELEFONE / WHATSAPP *</label><input name="phone" required value="${esc(customer.phone)}" placeholder="(11) 99999-9999"></div><div class="field"><label>CPF / CNPJ</label><input name="document" value="${esc(customer.document)}" placeholder="000.000.000-00"></div><div class="field full"><label>E-MAIL</label><input name="email" type="email" value="${esc(customer.email)}" placeholder="cliente@email.com"></div><div class="field full"><label>OBSERVAÇÕES</label><textarea name="notes" placeholder="Preferências, orientações ou informações importantes...">${esc(customer.notes)}</textarea></div>${customer.id ? `<label class="field full checkbox-field"><span><input name="active" type="checkbox" ${customer.active !== false ? 'checked' : ''}> Cliente ativo para novos atendimentos</span></label>` : ''}${formActions(customer.id ? 'Salvar alterações' : 'Cadastrar cliente')}</form>`);
+  openModal(customer.id ? 'Editar cliente' : 'Novo cliente', 'RELACIONAMENTO', `<form id="customer-form" class="form-grid"><div class="field full"><label>NOME COMPLETO *</label><input name="name" required value="${esc(customer.name)}" placeholder="Nome completo do cliente"></div><div class="field"><label>TELEFONE / WHATSAPP *</label><input name="phone" required value="${esc(customer.phone)}" placeholder="(11) 99999-9999"></div><div class="field"><label>CPF / CNPJ</label><input id="customer-document" name="document" inputmode="numeric" maxlength="18" value="${esc(formatCpfCnpj(customer.document))}" placeholder="000.000.000-00"><small class="field-help">Necessário para comprovantes, recibos e garantias nominais.</small></div><div class="field full"><label>E-MAIL</label><input name="email" type="email" value="${esc(customer.email)}" placeholder="cliente@email.com"></div><div class="field full"><label>OBSERVAÇÕES</label><textarea name="notes" placeholder="Preferências, orientações ou informações importantes...">${esc(customer.notes)}</textarea></div>${customer.id ? `<label class="field full checkbox-field"><span><input name="active" type="checkbox" ${customer.active !== false ? 'checked' : ''}> Cliente ativo para novos atendimentos</span></label>` : ''}${formActions(customer.id ? 'Salvar alterações' : 'Cadastrar cliente')}</form>`);
+  document.querySelector('#customer-document').addEventListener('input', event => {
+    event.target.value = formatCpfCnpj(event.target.value);
+    event.target.removeAttribute('aria-invalid');
+    event.target.setCustomValidity('');
+  });
   document.querySelector('#customer-form').addEventListener('submit', event => {
     event.preventDefault();
     const form = new FormData(event.target);
@@ -1327,7 +1444,17 @@ function customerModal(customer = {}) {
     const digits = data.phone.replace(/\D/g, '');
     const duplicate = state.customers.find(entry => entry.id !== customer.id && digits && String(entry.phone || '').replace(/\D/g, '') === digits);
     if (duplicate) return toast(`Já existe um cliente com este telefone: ${duplicate.name}.`, 'error');
-    const record = { id: customer.id || uid('c'), name: data.name.trim(), phone: data.phone.trim(), document: data.document.trim(), email: data.email.trim(), notes: data.notes.trim(), active: customer.id ? form.has('active') : true, createdAt: customer.createdAt || isoToday() };
+    const customerDocument = formatCpfCnpj(data.document);
+    const documentInput = document.querySelector('#customer-document');
+    if (customerDocument && !isValidCpfCnpj(customerDocument)) {
+      documentInput.setAttribute('aria-invalid', 'true');
+      documentInput.setCustomValidity('Informe um CPF ou CNPJ válido.');
+      documentInput.reportValidity();
+      return toast('O CPF ou CNPJ informado não é válido.', 'error');
+    }
+    const duplicateDocument = customerDocument && state.customers.find(entry => entry.id !== customer.id && String(entry.document || '').replace(/\D/g, '') === customerDocument.replace(/\D/g, ''));
+    if (duplicateDocument) return toast(`Este CPF/CNPJ já pertence a ${duplicateDocument.name}.`, 'error');
+    const record = { id: customer.id || uid('c'), name: data.name.trim(), phone: data.phone.trim(), document: customerDocument, email: data.email.trim(), notes: data.notes.trim(), active: customer.id ? form.has('active') : true, createdAt: customer.createdAt || isoToday() };
     if (customer.id) {
       state.customers = state.customers.map(entry => entry.id === customer.id ? record : entry);
       state.orders.filter(order => order.customerId === customer.id).forEach(order => { order.customer = record.name; order.phone = record.phone; });
@@ -1441,7 +1568,7 @@ function orderModal(order = {}) {
       state.customers.unshift(customer);
     }
     const status = order.id ? data.status : 'analysis';
-    const record = { id: order.id || `OS-${next}`, customerId: customer.id, customer: data.customer.trim(), phone: data.phone.trim(), attendanceType: needsAddress ? 'pickup_return' : 'in_store_service', deliveryAddress: address ? { ...address } : null, device: data.device.trim(), imei, issue: data.issue.trim(), serviceId: data.serviceId, value: data.value === '' ? null : Number(data.value), status, createdAt: order.createdAt || isoToday(), dueAt: data.dueAt, reminderAt: data.reminderAt, reminder: data.reminder.trim(), deliveredAt: status === 'delivered' ? order.deliveredAt || new Date().toISOString() : '' };
+    const record = { id: order.id || `OS-${next}`, customerId: customer.id, customer: data.customer.trim(), customerDocument: formatCpfCnpj(order.customerDocument || customer.document || ''), phone: data.phone.trim(), attendanceType: needsAddress ? 'pickup_return' : 'in_store_service', deliveryAddress: address ? { ...address } : null, device: data.device.trim(), imei, issue: data.issue.trim(), serviceId: data.serviceId, value: data.value === '' ? null : Number(data.value), status, createdAt: order.createdAt || isoToday(), dueAt: data.dueAt, reminderAt: data.reminderAt, reminder: data.reminder.trim(), deliveredAt: status === 'delivered' ? order.deliveredAt || new Date().toISOString() : '', warrantyDays: Number(order.warrantyDays ?? state.settings.warrantyDays ?? 0), warrantyNotes: order.warrantyNotes || state.settings.orderNotes || '' };
     if (order.id) state.orders = state.orders.map(item => item.id === order.id ? record : item);
     else state.orders.unshift(record);
     syncRepairDeliveries(record, customer, address);
@@ -1486,9 +1613,10 @@ function stockModal() {
 function viewOrder(order) {
   if (!order) return;
   const service = serviceName(order.serviceId);
+  const customer = transactionCustomer(order);
   const digits = String(order.phone || '').replace(/\D/g, '');
   const message = encodeURIComponent(`Olá, ${order.customer}! Sobre sua ordem ${order.id} (${order.device}): o status atual é ${statusLabel(order.status)}.`);
-  openModal(order.id, 'DETALHES DA ORDEM', `<div class="order-detail"><div class="order-detail-header"><div><span class="status ${statusMap[order.status]?.[1] || 'waiting'}">${esc(statusLabel(order.status))}</span><h3>${esc(order.device)}</h3><p>${esc(order.issue)}</p></div><strong class="order-detail-value">${order.value == null ? 'A consultar' : brl.format(order.value)}</strong></div><div class="detail-grid"><div class="field"><label>CLIENTE</label><strong>${esc(order.customer)}</strong><span class="field-help">${esc(order.phone || 'Sem telefone')}</span></div><div class="field"><label>ATENDIMENTO</label><strong>${esc(ATTENDANCE_LABELS[order.attendanceType] || ATTENDANCE_LABELS.in_store_service)}</strong></div><div class="field"><label>IMEI</label><strong>${esc(order.imei || 'Não informado')}</strong></div><div class="field"><label>SERVIÇO</label><strong>${esc(service)}</strong></div><div class="field"><label>PREVISÃO DE ENTREGA</label><strong>${formatDate(order.dueAt)}</strong></div><div class="field"><label>ENTRADA</label><strong>${formatDate(order.createdAt)}</strong></div><div class="field"><label>GARANTIA PADRÃO</label><strong>${Number(state.settings.warrantyDays || 0)} dias</strong></div></div>${order.deliveryAddress ? `<div class="detail-section address-detail-section"><h3>Endereço de busca e devolução</h3><p>${esc(formatAddress(order.deliveryAddress))}</p>${order.deliveryAddress.reference ? `<small>Referência: ${esc(order.deliveryAddress.reference)}</small>` : ''}</div>` : ''}${order.reminder ? `<div class="detail-section reminder-callout"><h3>Lembrete</h3><p>${esc(order.reminder)}</p><small>${formatDateTime(order.reminderAt)}</small></div>` : ''}${state.settings.orderNotes ? `<div class="detail-section"><h3>Condições e observações</h3><p>${esc(state.settings.orderNotes)}</p></div>` : ''}<div class="form-actions">${digits ? `<a class="ghost-button" href="https://wa.me/55${esc(digits)}?text=${message}" target="_blank" rel="noopener noreferrer">WhatsApp ↗</a>` : ''}<button class="ghost-button" data-action="edit-order" data-id="${esc(order.id)}">Editar</button>${order.status !== 'delivered' && order.status !== 'cancelled' ? `<button class="primary-button" data-action="deliver-order" data-id="${esc(order.id)}">✓ Marcar como entregue</button>` : ''}</div></div>`);
+  openModal(order.id, 'DETALHES DA ORDEM', `<div class="order-detail"><div class="order-detail-header"><div><span class="status ${statusMap[order.status]?.[1] || 'waiting'}">${esc(statusLabel(order.status))}</span><h3>${esc(order.device)}</h3><p>${esc(order.issue)}</p></div><strong class="order-detail-value">${order.value == null ? 'A consultar' : brl.format(order.value)}</strong></div><div class="detail-grid"><div class="field"><label>CLIENTE</label><strong>${esc(order.customer)}</strong><span class="field-help">${esc(order.phone || 'Sem telefone')}</span></div><div class="field"><label>CPF / CNPJ</label><strong>${esc(customer.document || 'Não informado')}</strong></div><div class="field"><label>ATENDIMENTO</label><strong>${esc(ATTENDANCE_LABELS[order.attendanceType] || ATTENDANCE_LABELS.in_store_service)}</strong></div><div class="field"><label>IMEI</label><strong>${esc(order.imei || 'Não informado')}</strong></div><div class="field"><label>SERVIÇO</label><strong>${esc(service)}</strong></div><div class="field"><label>PREVISÃO DE ENTREGA</label><strong>${formatDate(order.dueAt)}</strong></div><div class="field"><label>ENTRADA</label><strong>${formatDate(order.createdAt)}</strong></div><div class="field"><label>GARANTIA</label><strong>${Number(order.warrantyDays ?? state.settings.warrantyDays ?? 0)} dias</strong></div></div>${order.deliveryAddress ? `<div class="detail-section address-detail-section"><h3>Endereço de busca e devolução</h3><p>${esc(formatAddress(order.deliveryAddress))}</p>${order.deliveryAddress.reference ? `<small>Referência: ${esc(order.deliveryAddress.reference)}</small>` : ''}</div>` : ''}${order.reminder ? `<div class="detail-section reminder-callout"><h3>Lembrete</h3><p>${esc(order.reminder)}</p><small>${formatDateTime(order.reminderAt)}</small></div>` : ''}${state.settings.orderNotes ? `<div class="detail-section"><h3>Condições e observações</h3><p>${esc(state.settings.orderNotes)}</p></div>` : ''}<div class="form-actions">${digits ? `<a class="ghost-button" href="https://wa.me/55${esc(digits)}?text=${message}" target="_blank" rel="noopener noreferrer">WhatsApp ↗</a>` : ''}<button class="ghost-button" data-action="edit-order" data-id="${esc(order.id)}">Editar</button>${order.value != null ? `<button class="ghost-button" data-action="print-order-receipt" data-id="${esc(order.id)}">Emitir recibo</button>` : ''}<button class="ghost-button" data-action="print-order-warranty" data-id="${esc(order.id)}">Emitir garantia</button>${order.status !== 'delivered' && order.status !== 'cancelled' ? `<button class="primary-button" data-action="deliver-order" data-id="${esc(order.id)}">✓ Marcar como entregue</button>` : ''}</div></div>`);
 }
 
 function viewDelivery(delivery) {
@@ -1926,6 +2054,11 @@ document.addEventListener('click', event => {
     case 'new-appointment': appointmentModal(); break;
     case 'edit-appointment': appointmentModal(state.appointments.find(item => item.id === id)); break;
     case 'view-sale': viewSale(state.sales.find(item => item.id === id)); break;
+    case 'print-sale-proof': printSaleDocument(state.sales.find(item => item.id === id), 'comprovante'); break;
+    case 'print-sale-receipt': printSaleDocument(state.sales.find(item => item.id === id), 'recibo'); break;
+    case 'print-sale-warranty': printSaleDocument(state.sales.find(item => item.id === id), 'garantia'); break;
+    case 'print-order-receipt': printOrderDocument(state.orders.find(item => item.id === id), 'recibo'); break;
+    case 'print-order-warranty': printOrderDocument(state.orders.find(item => item.id === id), 'garantia'); break;
     case 'view-delivery': viewDelivery(state.deliveries.find(item => item.id === id)); break;
     case 'add-cart-product': addCartProduct(id); break;
     case 'cart-increase': addCartProduct(id); break;
