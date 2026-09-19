@@ -1004,6 +1004,10 @@ select:not([multiple]):focus-visible { border-color: #a5ba64; box-shadow: 0 0 0 
 .pos-total strong, .cart-total strong { font-size: 19px; letter-spacing: -.04em; }
 .pos-actions { display: grid; gap: 8px; padding: 0 17px 17px; }
 .pos-checkout { width: 100%; min-height: 47px; display: inline-flex; margin-top: 14px; padding: 0 17px; }
+.stripe-checkout-button { background: linear-gradient(135deg, #635bff, #4f46e5); color: #fff; box-shadow: 0 12px 28px rgba(99, 91, 255, .25); }
+.stripe-checkout-button:hover { box-shadow: 0 16px 34px rgba(99, 91, 255, .32); transform: translateY(-1px); }
+.stripe-payment-help { display: block; margin-top: 7px; color: var(--muted); line-height: 1.45; }
+.stripe-payment-error { border-color: rgba(214, 66, 66, .28); background: rgba(214, 66, 66, .06); }
 .cart-summary { display: grid; gap: 10px; padding: 15px 17px; border-top: 1px solid var(--line); }
 .cart-summary > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 10px; min-width: 0; color: #566058; font-size: 12px; }
 .cart-summary > div > strong { margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; }

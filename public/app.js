@@ -1,4 +1,4 @@
-const PAYMENT_LABELS = { pix: 'Pix', debit: 'Cartão de débito', credit: 'Cartão de crédito', cash: 'Dinheiro', transfer: 'Transferência' };
+const PAYMENT_LABELS = { pix: 'Pix', debit: 'Cartão de débito', credit: 'Cartão de crédito', cash: 'Dinheiro', transfer: 'Transferência', stripe: 'Stripe Checkout' };
 const APPOINTMENT_LABELS = { repair: 'Reparo', delivery: 'Entrega', consultation: 'Atendimento', reminder: 'Lembrete', meeting: 'Reunião' };
 const ATTENDANCE_LABELS = { delivery: 'Entrega', pickup_return: 'Serviço Busca e Leva', counter_sale: 'Venda balcão', in_store_service: 'Serviço em loja' };
 const DELIVERY_KIND_LABELS = { sale_delivery: 'Entrega de compra', repair_pickup: 'Busca de aparelho', repair_return: 'Devolução do reparo' };
@@ -605,7 +605,7 @@ function renderDashboard() {
   const lowProducts = state.products.filter(product => product.stock <= product.minimum).sort((a, b) => a.stock - b.stock);
   const openPayables = state.payables.filter(payable => !payable.paid);
   const payable = sum(openPayables);
-  const todaySales = state.sales.filter(sale => String(sale.createdAt).slice(0, 10) === today && sale.status !== 'cancelled');
+  const todaySales = state.sales.filter(sale => String(sale.createdAt).slice(0, 10) === today && sale.status === 'paid');
   const recentOrders = [...state.orders].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 5);
   const reminders = state.orders.filter(order => order.reminderAt && order.reminder).sort((a, b) => a.reminderAt.localeCompare(b.reminderAt)).slice(0, 3);
   const appointmentCount = state.appointments.filter(appointment => appointment.date === today && appointment.status !== 'cancelled').length;
@@ -710,7 +710,7 @@ function customerRows(list) {
     const orders = customerOrders(customer);
     const sales = customerSales(customer);
     const last = [...orders.map(order => order.createdAt), ...sales.map(sale => String(sale.createdAt).slice(0, 10))].filter(Boolean).sort().at(-1);
-    const total = sum(orders.filter(order => order.status !== 'cancelled'), 'value') + sum(sales.filter(sale => sale.status !== 'cancelled'), 'total');
+    const total = sum(orders.filter(order => order.status !== 'cancelled'), 'value') + sum(sales.filter(sale => sale.status === 'paid'), 'total');
     return `<tr><td><div class="cell-main"><span class="customer-avatar avatar">${esc(initials(customer.name))}</span><span><strong>${esc(customer.name)}</strong><small>${customer.active === false ? 'Cadastro inativo' : esc(customer.document || 'Cliente Cellf')}</small></span></div></td><td>${esc(customer.phone || '—')}<br><small>${esc(customer.email || 'Sem e-mail')}</small></td><td>${orders.length} ${orders.length === 1 ? 'ordem' : 'ordens'} · ${sales.length} ${sales.length === 1 ? 'venda' : 'vendas'}</td><td class="money">${brl.format(total)}</td><td>${formatDate(last)}</td><td><button class="more-button" data-action="view-customer" data-id="${esc(customer.id)}" aria-label="Ver ${esc(customer.name)}">•••</button></td></tr>`;
   }).join('') : '<tr><td colspan="6"><div class="table-empty">Nenhum cliente encontrado.</div></td></tr>'}</tbody>`;
 }
@@ -799,8 +799,8 @@ function bindTableFilter(type) {
 
 function renderSales() {
   const today = isoToday();
-  const todaySales = state.sales.filter(sale => String(sale.createdAt).slice(0, 10) === today && sale.status !== 'cancelled');
-  const monthSales = state.sales.filter(sale => String(sale.createdAt).slice(0, 7) === today.slice(0, 7) && sale.status !== 'cancelled');
+  const todaySales = state.sales.filter(sale => String(sale.createdAt).slice(0, 10) === today && sale.status === 'paid');
+  const monthSales = state.sales.filter(sale => String(sale.createdAt).slice(0, 7) === today.slice(0, 7) && sale.status === 'paid');
   const products = state.products.filter(product => normalize(`${product.name} ${product.sku} ${product.category}`).includes(normalize(salesQuery)));
   const activeCustomers = state.customers.filter(customer => customer.active !== false);
   const deliverySale = cart.attendanceType === 'delivery';
@@ -811,19 +811,19 @@ function renderSales() {
         <div class="pos-search"><label class="filter-search search-box"><span aria-hidden="true">⌕</span><input id="pos-search" value="${esc(salesQuery)}" placeholder="Buscar por produto, SKU ou categoria" aria-label="Buscar produto para venda"></label></div>
         <div class="pos-products">${products.length ? products.map(product => {
           const reserved = cart.items.find(item => item.productId === product.id)?.quantity || 0;
-          const available = Number(product.stock) - reserved;
+          const available = availableProductStock(product.id) - reserved;
           return `<button class="pos-product product-card ${available <= 0 ? 'is-unavailable' : ''}" data-action="add-cart-product" data-id="${esc(product.id)}" ${available <= 0 ? 'disabled' : ''}><span class="product-thumb">${esc(product.name?.[0] || 'P')}</span><span class="pos-product-copy"><strong>${esc(product.name)}</strong><small>${esc(product.category)} · ${available} disponíveis</small></span><strong class="money">${brl.format(product.price)}</strong><span class="pos-add" aria-hidden="true">＋</span></button>`;
         }).join('') : emptyState('Nenhum produto encontrado', 'Experimente buscar por outro nome, código ou categoria.')}</div>
       </section>
       <aside class="card pos-cart"><header class="card-header"><div><p class="eyebrow">CAIXA</p><h2>Venda atual</h2></div>${cart.items.length ? '<button class="text-button" data-action="clear-cart">Limpar</button>' : ''}</header>
         <div class="pos-cart-content">${cart.items.length ? cart.items.map(item => `<div class="cart-item"><div class="cart-item-info"><strong>${esc(item.name)}</strong><small>${brl.format(item.unitPrice)} cada</small></div><div class="cart-item-actions"><button class="icon-action" data-action="cart-decrease" data-id="${esc(item.productId)}" aria-label="Diminuir quantidade">−</button><strong>${item.quantity}</strong><button class="icon-action" data-action="cart-increase" data-id="${esc(item.productId)}" aria-label="Aumentar quantidade">＋</button></div><strong class="money">${brl.format(item.quantity * item.unitPrice)}</strong></div>`).join('') : emptyState('Sua venda começa aqui', 'Escolha produtos ao lado para adicionar ao carrinho.')}
-          ${cart.items.length ? `<div class="cart-fields"><div class="field"><label for="sale-attendance-type">TIPO DE ATENDIMENTO</label><select id="sale-attendance-type" data-action="sale-attendance-type"><option value="counter_sale" ${!deliverySale ? 'selected' : ''}>${ATTENDANCE_LABELS.counter_sale}</option><option value="delivery" ${deliverySale ? 'selected' : ''}>${ATTENDANCE_LABELS.delivery}</option></select></div><div class="field"><label for="sale-customer">CLIENTE${deliverySale ? ' *' : ''}</label><select id="sale-customer" data-action="sale-customer"><option value="">${deliverySale ? 'Selecione o cliente da entrega' : 'Cliente de balcão'}</option>${activeCustomers.map(customer => `<option value="${esc(customer.id)}" ${customer.id === cart.customerId ? 'selected' : ''}>${esc(customer.name)}${customer.document ? ` · ${esc(formatCpfCnpj(customer.document))}` : ''}</option>`).join('')}</select><small class="field-help">Selecione um cliente com CPF/CNPJ para emitir comprovante, recibo e garantia nominais.</small></div>${deliverySale ? `<section class="sale-delivery-address"><div class="address-form-heading"><h3>Endereço deste pedido</h3><p>Informado somente nesta entrega, sem alterar o cadastro do cliente.</p></div><div class="form-grid sale-address-grid">${addressFieldsMarkup(cart.deliveryAddress || {}, { required: true, action: 'sale-address-field' })}</div></section>` : ''}<div class="field"><label for="sale-payment">FORMA DE PAGAMENTO</label><select id="sale-payment" data-action="sale-payment">${Object.entries(PAYMENT_LABELS).map(([value, label]) => `<option value="${value}" ${value === cart.payment ? 'selected' : ''}>${label}</option>`).join('')}</select></div><div class="field"><label for="sale-discount">DESCONTO (R$)</label><input id="sale-discount" data-action="sale-discount" type="number" min="0" step="0.01" value="${cart.discount || ''}" placeholder="0,00"></div></div>
-          <div class="cart-summary"><div><span>Subtotal</span><strong>${brl.format(cartSubtotal())}</strong></div><div><span>Desconto</span><strong>− ${brl.format(Math.min(Number(cart.discount || 0), cartSubtotal()))}</strong></div><div class="cart-total"><span>Total a receber</span><strong>${brl.format(cartTotal())}</strong></div></div><button class="primary-button pos-checkout" data-action="complete-sale">✓ Finalizar venda</button>` : ''}
+          ${cart.items.length ? `<div class="cart-fields"><div class="field"><label for="sale-attendance-type">TIPO DE ATENDIMENTO</label><select id="sale-attendance-type" data-action="sale-attendance-type"><option value="counter_sale" ${!deliverySale ? 'selected' : ''}>${ATTENDANCE_LABELS.counter_sale}</option><option value="delivery" ${deliverySale ? 'selected' : ''}>${ATTENDANCE_LABELS.delivery}</option></select></div><div class="field"><label for="sale-customer">CLIENTE${deliverySale ? ' *' : ''}</label><select id="sale-customer" data-action="sale-customer"><option value="">${deliverySale ? 'Selecione o cliente da entrega' : 'Cliente de balcão'}</option>${activeCustomers.map(customer => `<option value="${esc(customer.id)}" ${customer.id === cart.customerId ? 'selected' : ''}>${esc(customer.name)}${customer.document ? ` · ${esc(formatCpfCnpj(customer.document))}` : ''}</option>`).join('')}</select><small class="field-help">Selecione um cliente com CPF/CNPJ para emitir comprovante, recibo e garantia nominais.</small></div>${deliverySale ? `<section class="sale-delivery-address"><div class="address-form-heading"><h3>Endereço deste pedido</h3><p>Informado somente nesta entrega, sem alterar o cadastro do cliente.</p></div><div class="form-grid sale-address-grid">${addressFieldsMarkup(cart.deliveryAddress || {}, { required: true, action: 'sale-address-field' })}</div></section>` : ''}<div class="field"><label for="sale-payment">FORMA DE PAGAMENTO</label><select id="sale-payment" data-action="sale-payment">${Object.entries(PAYMENT_LABELS).map(([value, label]) => `<option value="${value}" ${value === cart.payment ? 'selected' : ''}>${label}</option>`).join('')}</select>${cart.payment === 'stripe' ? '<small class="field-help stripe-payment-help">Pagamento seguro por cartão, Pix ou carteira habilitada na Stripe.</small>' : ''}</div><div class="field"><label for="sale-discount">DESCONTO (R$)</label><input id="sale-discount" data-action="sale-discount" type="number" min="0" step="0.01" value="${cart.discount || ''}" placeholder="0,00"></div></div>
+          <div class="cart-summary"><div><span>Subtotal</span><strong>${brl.format(cartSubtotal())}</strong></div><div><span>Desconto</span><strong>− ${brl.format(Math.min(Number(cart.discount || 0), cartSubtotal()))}</strong></div><div class="cart-total"><span>Total a receber</span><strong>${brl.format(cartTotal())}</strong></div></div><button class="primary-button pos-checkout${cart.payment === 'stripe' ? ' stripe-checkout-button' : ''}" data-action="complete-sale">${cart.payment === 'stripe' ? '↗ Cobrar com Stripe' : '✓ Finalizar venda'}</button>` : ''}
         </div>
       </aside>
     </div>
     <section class="card sale-history"><header class="card-header"><div><p class="eyebrow">MOVIMENTO</p><h2>Últimas vendas</h2></div><button class="text-button" data-action="export-sales">Exportar CSV ↓</button></header>
-      ${state.sales.length ? `<table class="data-table"><thead><tr><th>VENDA</th><th>CLIENTE / ATENDIMENTO</th><th>ITENS</th><th>PAGAMENTO</th><th>DATA</th><th>TOTAL</th><th><span class="sr-only">Ações</span></th></tr></thead><tbody>${state.sales.slice(0, 12).map(sale => `<tr><td><strong>${esc(sale.id.toUpperCase())}</strong></td><td>${esc(sale.customer || 'Cliente de balcão')}<br><small>${esc(ATTENDANCE_LABELS[sale.attendanceType] || ATTENDANCE_LABELS.counter_sale)}</small></td><td>${sale.items.reduce((total, item) => total + item.quantity, 0)} un.</td><td>${esc(paymentLabel(sale))}</td><td>${formatDateTime(sale.createdAt)}</td><td class="money">${brl.format(sale.total)}</td><td><button class="more-button" data-action="view-sale" data-id="${esc(sale.id)}">•••</button></td></tr>`).join('')}</tbody></table><div class="mobile-cards">${state.sales.slice(0, 12).map(sale => `<article class="mobile-card"><div class="mobile-card-top"><div><strong>${esc(sale.customer || 'Cliente de balcão')}</strong><small>${esc(ATTENDANCE_LABELS[sale.attendanceType] || ATTENDANCE_LABELS.counter_sale)} · ${formatDateTime(sale.createdAt)}</small></div><button class="more-button" data-action="view-sale" data-id="${esc(sale.id)}">•••</button></div><div class="mobile-card-bottom"><span>${esc(paymentLabel(sale))}</span><strong class="money">${brl.format(sale.total)}</strong></div></article>`).join('')}</div>` : emptyState('Nenhuma venda registrada', 'Finalize uma venda para acompanhar o histórico do caixa.')}
+      ${state.sales.length ? `<table class="data-table"><thead><tr><th>VENDA</th><th>CLIENTE / ATENDIMENTO</th><th>ITENS</th><th>PAGAMENTO</th><th>STATUS</th><th>DATA</th><th>TOTAL</th><th><span class="sr-only">Ações</span></th></tr></thead><tbody>${state.sales.slice(0, 12).map(sale => `<tr><td><strong>${esc(sale.id.toUpperCase())}</strong></td><td>${esc(sale.customer || 'Cliente de balcão')}<br><small>${esc(ATTENDANCE_LABELS[sale.attendanceType] || ATTENDANCE_LABELS.counter_sale)}</small></td><td>${sale.items.reduce((total, item) => total + item.quantity, 0)} un.</td><td>${esc(paymentLabel(sale))}</td><td>${saleStatusMarkup(sale)}</td><td>${formatDateTime(sale.createdAt)}</td><td class="money">${brl.format(sale.total)}</td><td><button class="more-button" data-action="view-sale" data-id="${esc(sale.id)}">•••</button></td></tr>`).join('')}</tbody></table><div class="mobile-cards">${state.sales.slice(0, 12).map(sale => `<article class="mobile-card"><div class="mobile-card-top"><div><strong>${esc(sale.customer || 'Cliente de balcão')}</strong><small>${esc(ATTENDANCE_LABELS[sale.attendanceType] || ATTENDANCE_LABELS.counter_sale)} · ${formatDateTime(sale.createdAt)}</small></div><button class="more-button" data-action="view-sale" data-id="${esc(sale.id)}">•••</button></div><div class="mobile-card-bottom"><span>${saleStatusMarkup(sale)}</span><strong class="money">${brl.format(sale.total)}</strong></div></article>`).join('')}</div>` : emptyState('Nenhuma venda registrada', 'Finalize uma venda para acompanhar o histórico do caixa.')}
     </section>`;
 
   associateFormLabels(content);
@@ -839,6 +839,14 @@ function renderSales() {
 
 function cartSubtotal() { return cart.items.reduce((total, item) => total + item.quantity * item.unitPrice, 0); }
 function cartTotal() { return Math.max(0, cartSubtotal() - Math.min(Number(cart.discount || 0), cartSubtotal())); }
+function pendingStripeQuantity(productId) { return state.sales.filter(sale => sale.payment === 'stripe' && sale.status === 'pending_payment').reduce((total, sale) => total + (sale.items || []).filter(item => item.productId === productId).reduce((quantity, item) => quantity + Number(item.quantity || 0), 0), 0); }
+function availableProductStock(productId) { const product = state.products.find(item => item.id === productId); return Number(product?.stock || 0) - pendingStripeQuantity(productId); }
+function saleStatusMarkup(sale) {
+  if (sale.status === 'paid') return '<span class="status paid">Pago</span>';
+  if (sale.status === 'pending_payment') return '<span class="status waiting">Aguardando Stripe</span>';
+  if (sale.status === 'payment_failed') return '<span class="status overdue">Pagamento falhou</span>';
+  return '<span class="status overdue">Cancelada</span>';
+}
 function updateCartSummary() {
   const rows = document.querySelectorAll('.pos-cart .cart-summary > div');
   if (rows.length < 3) return;
@@ -852,18 +860,22 @@ function addCartProduct(id, quantity = 1) {
   if (!product) return toast('Produto não encontrado.', 'error');
   const existing = cart.items.find(item => item.productId === id);
   const nextQuantity = (existing?.quantity || 0) + quantity;
-  if (nextQuantity > Number(product.stock)) return toast(`Apenas ${product.stock} unidades disponíveis em estoque.`, 'error');
+  const available = availableProductStock(product.id);
+  if (nextQuantity > available) return toast(`Apenas ${available} unidades disponíveis em estoque.`, 'error');
   if (nextQuantity <= 0) cart.items = cart.items.filter(item => item.productId !== id);
   else if (existing) existing.quantity = nextQuantity;
   else cart.items.push({ productId: product.id, name: product.name, sku: product.sku, quantity: 1, unitPrice: Number(product.price), cost: Number(product.cost || 0) });
   renderSales();
 }
 
-function completeSale() {
+function validateCartForSale() {
   if (!cart.items.length) return toast('Adicione pelo menos um produto antes de finalizar.', 'error');
   for (const item of cart.items) {
     const product = state.products.find(entry => entry.id === item.productId);
-    if (!product || Number(product.stock) < item.quantity) return toast(`Estoque insuficiente para ${item.name}.`, 'error');
+    if (!product || availableProductStock(item.productId) < item.quantity) {
+      toast(`Estoque insuficiente para ${item.name}.`, 'error');
+      return null;
+    }
   }
 
   const customer = state.customers.find(entry => entry.id === cart.customerId);
@@ -872,7 +884,14 @@ function completeSale() {
   const deliveryAddress = deliverySale && cart.deliveryAddress ? normalizeAddress(cart.deliveryAddress) : null;
   if (deliverySale && !deliveryAddress) return toast('Informe o endereço de entrega diretamente neste pedido.', 'error');
   if (deliverySale && validateAddress(deliveryAddress)) return toast(validateAddress(deliveryAddress), 'error');
-  const sale = {
+  return { customer, deliverySale, deliveryAddress };
+}
+
+function saleFromCart({ status = 'paid', payment = cart.payment } = {}) {
+  const validation = validateCartForSale();
+  if (!validation) return null;
+  const { customer, deliverySale, deliveryAddress } = validation;
+  return {
     id: uid('v'),
     customerId: customer?.id || '',
     customer: customer?.name || 'Cliente de balcão',
@@ -882,14 +901,19 @@ function completeSale() {
     subtotal: cartSubtotal(),
     discount: Math.min(Number(cart.discount || 0), cartSubtotal()),
     total: cartTotal(),
-    payment: cart.payment,
+    payment,
+    paymentDetails: PAYMENT_LABELS[payment] || payment,
     attendanceType: deliverySale ? 'delivery' : 'counter_sale',
     deliveryAddress: deliveryAddress ? { ...deliveryAddress } : null,
-    status: 'paid',
+    status,
     warrantyDays: Number(state.settings.warrantyDays || 0),
     warrantyNotes: state.settings.orderNotes || '',
     createdAt: new Date().toISOString()
   };
+}
+
+function applyPaidSale(sale, { createDelivery = true } = {}) {
+  const customer = state.customers.find(entry => entry.id === sale.customerId);
 
   for (const item of sale.items) {
     const product = state.products.find(entry => entry.id === item.productId);
@@ -898,19 +922,64 @@ function completeSale() {
   }
 
   state.sales.unshift(sale);
-  if (deliverySale) state.deliveries.unshift(createDeliveryRecord({ sourceType: 'sale', sourceId: sale.id, kind: 'sale_delivery', customer, address: deliveryAddress, scheduledDate: isoToday() }));
+  if (createDelivery && sale.attendanceType === 'delivery') state.deliveries.unshift(createDeliveryRecord({ sourceType: 'sale', sourceId: sale.id, kind: 'sale_delivery', customer, address: sale.deliveryAddress, scheduledDate: isoToday() }));
   state.stockMovements = state.stockMovements.slice(0, 200);
   recordActivity('sale', `Venda ${sale.id.toUpperCase()} concluída · ${brl.format(sale.total)}`);
+}
+
+function completeSale() {
+  if (cart.payment === 'stripe') return startStripeCheckout();
+  const sale = saleFromCart();
+  if (!sale) return;
+  applyPaidSale(sale);
   cart = { items: [], customerId: '', payment: 'pix', discount: 0, attendanceType: 'counter_sale', deliveryAddress: null };
   saveState();
   renderSales();
-  toast(`Venda concluída: ${brl.format(sale.total)} via ${PAYMENT_LABELS[sale.payment]}${deliverySale ? ' · entrega adicionada à logística' : ''}.`);
+  toast(`Venda concluída: ${brl.format(sale.total)} via ${PAYMENT_LABELS[sale.payment]}${sale.attendanceType === 'delivery' ? ' · entrega adicionada à logística' : ''}.`);
+}
+
+async function startStripeCheckout(existingSale = null) {
+  const sale = existingSale || saleFromCart({ status: 'pending_payment', payment: 'stripe' });
+  if (!sale) return;
+  sale.stripeAttemptId = uid('stripe');
+  const button = document.querySelector('[data-action="complete-sale"]');
+  if (button) { button.disabled = true; button.textContent = 'Abrindo checkout seguro…'; }
+
+  if (!existingSale) {
+    state.sales.unshift(sale);
+    recordActivity('sale', `Venda ${sale.id.toUpperCase()} aguardando pagamento pela Stripe`);
+    if (!saveState()) return;
+  } else {
+    sale.status = 'pending_payment';
+    sale.paymentFailure = '';
+    saveState();
+  }
+
+  try {
+    await flushStateSave();
+    const result = await apiRequest('/api/stripe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ saleId: sale.id })
+    });
+    if (!result.url || !/^https:\/\/checkout\.stripe\.com\//.test(result.url)) throw new Error('A Stripe retornou um endereço de checkout inválido.');
+    cart = { items: [], customerId: '', payment: 'pix', discount: 0, attendanceType: 'counter_sale', deliveryAddress: null };
+    window.location.assign(result.url);
+  } catch (error) {
+    sale.status = 'payment_failed';
+    sale.paymentFailure = error?.message || 'Não foi possível abrir o checkout.';
+    saveState();
+    renderSales();
+    toast(error?.message || 'Não foi possível iniciar o pagamento pela Stripe.', 'error');
+  }
 }
 
 function viewSale(sale) {
   if (!sale) return;
   const customer = transactionCustomer(sale);
-  openModal(sale.id.toUpperCase(), 'COMPROVANTE DE VENDA', `<div class="receipt"><div class="detail-grid"><div class="field"><label>CLIENTE</label><strong>${esc(sale.customer)}</strong></div><div class="field"><label>CPF / CNPJ</label><strong>${esc(customer.document || 'Não informado')}</strong></div><div class="field"><label>DATA E HORA</label><strong>${formatDateTime(sale.createdAt)}</strong></div><div class="field"><label>ATENDIMENTO</label><strong>${esc(ATTENDANCE_LABELS[sale.attendanceType] || ATTENDANCE_LABELS.counter_sale)}</strong></div><div class="field"><label>PAGAMENTO</label><strong>${esc(paymentLabel(sale))}</strong></div><div class="field"><label>STATUS</label><span class="status paid">Pagamento confirmado</span></div></div>${sale.deliveryAddress ? `<div class="detail-section address-detail-section"><h3>Endereço de entrega</h3><p>${esc(formatAddress(sale.deliveryAddress))}</p>${sale.deliveryAddress.reference ? `<small>Referência: ${esc(sale.deliveryAddress.reference)}</small>` : ''}</div>` : ''}<div class="detail-section"><h3>Itens da venda</h3>${sale.items.map(item => `<div class="cart-item"><div class="cart-item-info"><strong>${esc(item.name)}</strong><small>${item.quantity} × ${brl.format(item.unitPrice)}</small></div><strong class="money">${brl.format(item.quantity * item.unitPrice)}</strong></div>`).join('')}</div><div class="cart-summary"><div><span>Subtotal</span><strong>${brl.format(sale.subtotal)}</strong></div><div><span>Desconto</span><strong>− ${brl.format(sale.discount)}</strong></div><div class="cart-total"><span>Total pago</span><strong>${brl.format(sale.total)}</strong></div></div><div class="form-actions"><button class="ghost-button" data-action="close-modal">Fechar</button><button class="ghost-button" data-action="print-sale-receipt" data-id="${esc(sale.id)}">Emitir recibo</button><button class="ghost-button" data-action="print-sale-warranty" data-id="${esc(sale.id)}">Emitir garantia</button><button class="primary-button" data-action="print-sale-proof" data-id="${esc(sale.id)}">Imprimir comprovante</button></div></div>`);
+  const paid = sale.status === 'paid';
+  const retry = sale.payment === 'stripe' && ['pending_payment', 'payment_failed'].includes(sale.status);
+  openModal(sale.id.toUpperCase(), paid ? 'COMPROVANTE DE VENDA' : 'COBRANÇA DA VENDA', `<div class="receipt"><div class="detail-grid"><div class="field"><label>CLIENTE</label><strong>${esc(sale.customer)}</strong></div><div class="field"><label>CPF / CNPJ</label><strong>${esc(customer.document || 'Não informado')}</strong></div><div class="field"><label>DATA E HORA</label><strong>${formatDateTime(sale.createdAt)}</strong></div><div class="field"><label>ATENDIMENTO</label><strong>${esc(ATTENDANCE_LABELS[sale.attendanceType] || ATTENDANCE_LABELS.counter_sale)}</strong></div><div class="field"><label>PAGAMENTO</label><strong>${esc(paymentLabel(sale))}</strong></div><div class="field"><label>STATUS</label>${saleStatusMarkup(sale)}</div></div>${sale.paymentFailure ? `<div class="detail-section stripe-payment-error"><h3>Pagamento não iniciado</h3><p>${esc(sale.paymentFailure)}</p></div>` : ''}${sale.deliveryAddress ? `<div class="detail-section address-detail-section"><h3>Endereço de entrega</h3><p>${esc(formatAddress(sale.deliveryAddress))}</p>${sale.deliveryAddress.reference ? `<small>Referência: ${esc(sale.deliveryAddress.reference)}</small>` : ''}</div>` : ''}<div class="detail-section"><h3>Itens da venda</h3>${sale.items.map(item => `<div class="cart-item"><div class="cart-item-info"><strong>${esc(item.name)}</strong><small>${item.quantity} × ${brl.format(item.unitPrice)}</small></div><strong class="money">${brl.format(item.quantity * item.unitPrice)}</strong></div>`).join('')}</div><div class="cart-summary"><div><span>Subtotal</span><strong>${brl.format(sale.subtotal)}</strong></div><div><span>Desconto</span><strong>− ${brl.format(sale.discount)}</strong></div><div class="cart-total"><span>${paid ? 'Total pago' : 'Total a receber'}</span><strong>${brl.format(sale.total)}</strong></div></div><div class="form-actions"><button class="ghost-button" data-action="close-modal">Fechar</button>${retry ? `<button class="ghost-button" data-action="cancel-stripe-sale" data-id="${esc(sale.id)}">Cancelar cobrança</button><button class="primary-button" data-action="retry-stripe-sale" data-id="${esc(sale.id)}">↗ Abrir Stripe</button>` : ''}${paid ? `<button class="ghost-button" data-action="print-sale-receipt" data-id="${esc(sale.id)}">Emitir recibo</button><button class="ghost-button" data-action="print-sale-warranty" data-id="${esc(sale.id)}">Emitir garantia</button><button class="primary-button" data-action="print-sale-proof" data-id="${esc(sale.id)}">Imprimir comprovante</button>` : ''}</div></div>`);
 }
 
 function transactionCustomer(record = {}) {
@@ -1109,7 +1178,7 @@ function inclusiveDaySpan(values = []) {
 }
 
 function reportData() {
-  const sales = state.sales.filter(sale => sale.status !== 'cancelled' && withinPeriod(sale.createdAt));
+  const sales = state.sales.filter(sale => sale.status === 'paid' && withinPeriod(sale.createdAt));
   const orders = state.orders.filter(order => withinPeriod(order.createdAt));
   const delivered = state.orders.filter(order => order.status === 'delivered' && withinPeriod(order.deliveredAt || order.createdAt));
   const paidPayables = state.payables.filter(payable => payable.paid && withinPeriod(payable.paidAt || payable.dueAt));
@@ -1557,7 +1626,7 @@ function viewCustomer(customer) {
   if (!customer) return;
   const orders = customerOrders(customer);
   const sales = customerSales(customer);
-  const total = sum(orders.filter(order => order.status !== 'cancelled'), 'value') + sum(sales.filter(sale => sale.status !== 'cancelled'), 'total');
+  const total = sum(orders.filter(order => order.status !== 'cancelled'), 'value') + sum(sales.filter(sale => sale.status === 'paid'), 'total');
   const digits = String(customer.phone || '').replace(/\D/g, '');
   openModal(customer.name, 'FICHA DO CLIENTE', `<div class="customer-detail"><div class="customer-profile"><span class="customer-avatar avatar">${esc(initials(customer.name))}</span><div><strong>${esc(customer.name)}</strong><small>Cliente desde ${formatDate(customer.createdAt)}</small></div>${customer.active === false ? '<span class="status waiting">Inativo</span>' : '<span class="status ready">Ativo</span>'}</div><div class="detail-grid"><div class="field"><label>TELEFONE</label><strong>${esc(customer.phone || 'Não informado')}</strong></div><div class="field"><label>E-MAIL</label><strong>${esc(customer.email || 'Não informado')}</strong></div><div class="field"><label>CPF / CNPJ</label><strong>${esc(customer.document || 'Não informado')}</strong></div><div class="field"><label>TOTAL MOVIMENTADO</label><strong>${brl.format(total)}</strong></div></div>${customer.notes ? `<div class="detail-section"><h3>Observações</h3><p>${esc(customer.notes)}</p></div>` : ''}<div class="detail-section"><h3>Últimos atendimentos</h3>${orders.length ? `<div class="activity-list">${orders.slice(0, 5).map(order => `<button class="activity-item" data-action="view-order" data-id="${esc(order.id)}"><span><strong>${esc(order.device)}</strong><small>${esc(order.id)} · ${esc(ATTENDANCE_LABELS[order.attendanceType] || ATTENDANCE_LABELS.in_store_service)}</small></span><span class="status ${statusMap[order.status]?.[1] || 'waiting'}">${esc(statusLabel(order.status))}</span></button>`).join('')}</div>` : '<p>Este cliente ainda não possui ordens de serviço.</p>'}</div><div class="form-actions">${digits ? `<a class="ghost-button" href="https://wa.me/55${esc(digits)}" target="_blank" rel="noopener noreferrer">WhatsApp ↗</a>` : ''}<button class="primary-button" data-action="edit-customer" data-id="${esc(customer.id)}">Editar cliente</button></div></div>`);
 }
@@ -1844,8 +1913,45 @@ function exportCsv(name, headings, rows) {
 }
 
 function exportSales() {
-  exportCsv(`cellf-vendas-${isoToday()}.csv`, ['Código', 'Data', 'Cliente', 'Itens', 'Pagamento', 'Subtotal', 'Desconto', 'Total'], state.sales.map(sale => [sale.id.toUpperCase(), formatDateTime(sale.createdAt), sale.customer, sale.items.map(item => `${item.quantity}x ${item.name}`).join(' | '), paymentLabel(sale), sale.subtotal, sale.discount, sale.total]));
+  exportCsv(`cellf-vendas-${isoToday()}.csv`, ['Código', 'Data', 'Cliente', 'Itens', 'Pagamento', 'Subtotal', 'Desconto', 'Total'], state.sales.filter(sale => sale.status === 'paid').map(sale => [sale.id.toUpperCase(), formatDateTime(sale.createdAt), sale.customer, sale.items.map(item => `${item.quantity}x ${item.name}`).join(' | '), paymentLabel(sale), sale.subtotal, sale.discount, sale.total]));
   toast('Histórico de vendas exportado.');
+}
+
+async function cancelStripeSale(sale) {
+  if (!sale || sale.payment !== 'stripe' || !['pending_payment', 'payment_failed'].includes(sale.status)) return;
+  try {
+    await apiRequest(`/api/stripe?sale_id=${encodeURIComponent(sale.id)}`, { method: 'DELETE' });
+    await loadRemoteState();
+    closeModal();
+    navigate('sales');
+    toast('Cobrança da Stripe cancelada. O estoque foi liberado.');
+  } catch (error) {
+    toast(error?.message || 'Não foi possível cancelar a cobrança.', 'error');
+  }
+}
+
+async function handleStripeReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const action = params.get('stripe');
+  if (!['success', 'cancel'].includes(action)) return '';
+
+  try {
+    if (action === 'success') {
+      const sessionId = params.get('session_id') || '';
+      const result = await apiRequest(`/api/stripe?session_id=${encodeURIComponent(sessionId)}`);
+      await loadRemoteState();
+      return result.paid ? 'Pagamento confirmado pela Stripe e venda concluída.' : 'A Stripe ainda está processando o pagamento.';
+    }
+
+    const saleId = params.get('sale_id') || '';
+    await apiRequest(`/api/stripe?sale_id=${encodeURIComponent(saleId)}`, { method: 'DELETE' });
+    await loadRemoteState();
+    return 'Pagamento cancelado. Nenhuma venda foi confirmada.';
+  } catch (error) {
+    return error?.message || 'Não foi possível confirmar o retorno da Stripe.';
+  } finally {
+    window.history.replaceState({}, '', `${window.location.pathname}#sales`);
+  }
 }
 
 function exportReport() {
@@ -2070,7 +2176,10 @@ async function bootstrapApplication() {
       setShellAccess(true);
       syncShell();
       refreshBadges();
+      const stripeMessage = await handleStripeReturn();
+      if (stripeMessage) currentView = 'sales';
       navigate(currentView);
+      if (stripeMessage) toast(stripeMessage, /confirmad|concluíd/i.test(stripeMessage) ? 'success' : 'error');
       return true;
     } catch (error) {
       handleCloudError(error);
@@ -2147,6 +2256,8 @@ document.addEventListener('click', event => {
     case 'new-appointment': appointmentModal(); break;
     case 'edit-appointment': appointmentModal(state.appointments.find(item => item.id === id)); break;
     case 'view-sale': viewSale(state.sales.find(item => item.id === id)); break;
+    case 'retry-stripe-sale': closeModal(); startStripeCheckout(state.sales.find(item => item.id === id)); break;
+    case 'cancel-stripe-sale': cancelStripeSale(state.sales.find(item => item.id === id)); break;
     case 'print-sale-proof': printSaleDocument(state.sales.find(item => item.id === id), 'comprovante'); break;
     case 'print-sale-receipt': printSaleDocument(state.sales.find(item => item.id === id), 'recibo'); break;
     case 'print-sale-warranty': printSaleDocument(state.sales.find(item => item.id === id), 'garantia'); break;
@@ -2227,7 +2338,7 @@ document.addEventListener('change', event => {
     cart.customerId = event.target.value;
     if (cart.attendanceType === 'delivery') renderSales();
   }
-  if (event.target.matches('[data-action="sale-payment"]')) cart.payment = event.target.value;
+  if (event.target.matches('[data-action="sale-payment"]')) { cart.payment = event.target.value; renderSales(); }
   if (event.target.matches('[data-action="sale-discount"]')) { cart.discount = Math.max(0, Number(event.target.value || 0)); updateCartSummary(); }
   if (event.target.matches('[data-action="delivery-status"]')) {
     const delivery = state.deliveries.find(item => item.id === event.target.dataset.id);

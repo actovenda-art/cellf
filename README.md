@@ -10,7 +10,7 @@ Sistema de gestão para assistência técnica e comércio de celulares, com iden
 - **Agenda:** organização dos compromissos e da rotina da assistência.
 - **Produtos e estoque:** preços, custos, SKU, estoque mínimo e movimentações.
 - **Serviços:** catálogo de reparos com preços definidos ou sob consulta.
-- **Vendas / PDV:** atendimento de balcão e registro de vendas de produtos.
+- **Vendas / PDV:** atendimento de balcão, registro de vendas e cobrança segura pelo Stripe Checkout.
 - **Contas a pagar:** controle de vencimentos e confirmação de pagamentos.
 - **Relatórios:** indicadores de desempenho e acompanhamento da operação.
 - **Configurações:** sub-abas Empresa, Administrador, Documentos, Operação, Avisos e Privacidade, reunindo nome, slogan, CNPJ, responsável, endereço, anexos empresariais e preferências da loja em um único formulário.
@@ -27,7 +27,12 @@ npm start
 
 Abra `http://localhost:4173`.
 
-Não há dependências de terceiros, portanto não é necessário executar `npm install`.
+Instale as dependências e inicie o servidor:
+
+```bash
+npm install
+npm start
+```
 
 ## Verificação
 
@@ -57,6 +62,16 @@ O navegador conversa apenas com as rotas `/api/session`, `/api/state` e `/api/do
 ### Publicação na Vercel
 
 Cadastre as mesmas variáveis de ambiente nas configurações do projeto na Vercel e publique novamente. Nunca coloque `SUPABASE_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `CELLF_APP_PASSWORD`, `CELLF_APP_PASSWORD_HASH` ou `CELLF_AUTH_SECRET` em arquivos públicos, no JavaScript do navegador ou no repositório.
+
+## Configurar pagamentos com Stripe
+
+1. Conecte uma conta Stripe ao projeto pela Vercel Marketplace ou crie as chaves no painel da Stripe.
+2. Configure `STRIPE_SECRET_KEY` somente no ambiente do servidor.
+3. Na Stripe, crie um endpoint de webhook apontando para `https://cellf.com.br/api/stripe/webhook`.
+4. Assine os eventos `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed` e `checkout.session.expired`.
+5. Copie o segredo de assinatura do endpoint para `STRIPE_WEBHOOK_SECRET` na Vercel e faça uma nova publicação.
+
+O PDV cria uma venda pendente antes de abrir o Checkout. A baixa do estoque, a entrega e a confirmação financeira só acontecem depois que o servidor valida o pagamento com a Stripe. As formas de pagamento habilitadas na conta — como cartão, Pix e carteiras compatíveis — são selecionadas dinamicamente pela própria Stripe. Nenhuma chave secreta ou dado de cartão é enviado ao JavaScript público da Cellf.
 
 ## Configurar a consulta de IMEI
 

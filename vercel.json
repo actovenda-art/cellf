@@ -6,6 +6,8 @@
     { "src": "api/session.mjs", "use": "@vercel/node" },
     { "src": "api/state.mjs", "use": "@vercel/node" },
     { "src": "api/documents.mjs", "use": "@vercel/node" },
+    { "src": "api/stripe.mjs", "use": "@vercel/node" },
+    { "src": "api/stripe-webhook.mjs", "use": "@vercel/node" },
     { "src": "public/**", "use": "@vercel/static" }
   ],
   "routes": [
@@ -14,6 +16,8 @@
     { "src": "/api/session", "dest": "/api/session.mjs" },
     { "src": "/api/state", "dest": "/api/state.mjs" },
     { "src": "/api/documents", "dest": "/api/documents.mjs" },
+    { "src": "/api/stripe", "dest": "/api/stripe.mjs" },
+    { "src": "/api/stripe/webhook", "dest": "/api/stripe-webhook.mjs" },
     { "src": "/styles.css", "dest": "/public/styles.css" },
     { "src": "/app.js", "dest": "/public/app.js" },
     { "src": "/cellf-logo.png", "dest": "/public/cellf-logo.png" },
