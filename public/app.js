@@ -1989,20 +1989,20 @@ function renderCloudAccess(mode = 'login', message = '') {
   content.innerHTML = `<div class="cellf-public-page">
     <div class="cellf-public-header-stack">
       <header class="cellf-public-header">
+        <div class="cellf-public-glass-transition" aria-hidden="true">
+          <div class="cellf-distorted-glass"><span></span></div>
+          <svg class="cellf-glass-filter" focusable="false">
+            <defs>
+              <filter id="cellf-glass-distortion" x="-20%" y="-50%" width="140%" height="200%" color-interpolation-filters="sRGB">
+                <feTurbulence type="fractalNoise" baseFrequency="0.12 0.12" numOctaves="1" result="glass-noise"></feTurbulence>
+                <feDisplacementMap in="SourceGraphic" in2="glass-noise" scale="30" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
+              </filter>
+            </defs>
+          </svg>
+        </div>
         <a class="cellf-public-brand" href="#" aria-label="CELLF — início"><img src="/cellf-logo-updated.png" alt="CELLF" width="2172" height="724"></a>
         <nav aria-label="Navegação da apresentação"><a href="#cellf-services">Nossos serviços</a><button class="cellf-login-trigger" id="open-cellf-login" type="button" aria-haspopup="dialog" aria-controls="cellf-login-dialog">Login <span aria-hidden="true">↗</span></button></nav>
       </header>
-      <div class="cellf-public-glass-transition" aria-hidden="true">
-        <div class="cellf-distorted-glass"><span></span></div>
-        <svg class="cellf-glass-filter" focusable="false">
-          <defs>
-            <filter id="cellf-glass-distortion" x="-20%" y="-50%" width="140%" height="200%" color-interpolation-filters="sRGB">
-              <feTurbulence type="fractalNoise" baseFrequency="0.12 0.12" numOctaves="1" result="glass-noise"></feTurbulence>
-              <feDisplacementMap in="SourceGraphic" in2="glass-noise" scale="30" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
-            </filter>
-          </defs>
-        </svg>
-      </div>
     </div>
     <section class="cellf-public-hero" aria-labelledby="cellf-presentation-title">
       <div class="cellf-hero-copy"><p class="cellf-public-eyebrow">CELLF · REPARO E COMÉRCIO</p><h1 id="cellf-presentation-title">Seu celular.<br>Seu dia.<br><span>Tudo conectado.</span></h1><p class="cellf-hero-description">Reparo, compras e cuidado com o que conecta você. Na loja ou com entrega, a CELLF acompanha a sua rotina.</p><a class="cellf-public-cta" href="#cellf-services">Conheça nossos serviços <span aria-hidden="true">↓</span></a></div>
