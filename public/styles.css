@@ -2270,18 +2270,23 @@ body.cloud-auth-mode {
 /* Public presentation and on-demand account access. */
 body.cloud-auth-mode .content { display: block; padding: 0; }
 .cellf-public-page { width: 100%; background: #f7f8f2; color: #101310; }
-.cellf-public-header {
+.cellf-public-header-stack {
   position: sticky;
   top: 12px;
   z-index: 20;
   isolation: isolate;
+  width: calc(100% - 32px);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.cellf-public-header {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  width: calc(100% - 32px);
-  max-width: 1200px;
-  margin: 0 auto;
+  width: 100%;
   padding: 16px 28px;
   border: 1px solid rgba(255, 255, 255, .85);
   border-radius: 24px;
@@ -2296,50 +2301,41 @@ body.cloud-auth-mode .content { display: block; padding: 0; }
     -webkit-backdrop-filter: blur(22px) saturate(170%);
   }
 }
+.cellf-public-glass-transition {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 50px;
+  margin-top: -17px;
+  margin-bottom: -33px;
+  overflow: hidden;
+  border-radius: 0 0 24px 24px;
+  pointer-events: none;
+}
 .cellf-glass-filter { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
 .cellf-distorted-glass {
   position: absolute;
-  z-index: 2;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 50px;
+  z-index: 1;
+  inset: 0;
   overflow: hidden;
-  border: 1px solid rgba(245, 245, 245, .3);
-  border-radius: 0 0 23px 23px;
+  border: 1px solid rgba(245, 245, 245, .1);
+  border-radius: inherit;
   pointer-events: none;
-}
-.cellf-distorted-glass::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: rgba(10, 18, 18, .08);
-}
-.cellf-distorted-glass::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9), inset 1px 0 0 rgba(255, 255, 255, .48), inset -1px 0 0 rgba(0, 107, 147, .09);
 }
 .cellf-distorted-glass > span {
   position: absolute;
   inset: 0;
-  background-color: rgba(0, 0, 0, .16);
-  background-image: repeating-radial-gradient(
+  background: repeating-radial-gradient(
     circle at 50% 50%,
-    rgba(255, 255, 255, 0) 0,
+    rgba(255, 255, 255, 0),
     rgba(255, 255, 255, .2) 10px,
-    rgba(255, 255, 255, .92) 31px
+    rgb(255, 255, 255) 31px
   );
   background-size: 6px 6px;
   backdrop-filter: blur(0);
   -webkit-backdrop-filter: blur(0);
   filter: url('#cellf-glass-distortion');
-  opacity: .78;
 }
-.cellf-public-header > :not(.cellf-glass-filter, .cellf-distorted-glass) { position: relative; z-index: 1; }
 .cellf-public-brand { display: block; width: 170px; }
 .cellf-public-brand img { display: block; width: 100%; height: auto; }
 .cellf-public-header nav { display: flex; align-items: center; gap: 32px; }
@@ -2374,12 +2370,16 @@ body.cloud-auth-mode .content { display: block; padding: 0; }
 .cellf-login-dialog::backdrop { background: rgba(0, 0, 0, .72); backdrop-filter: blur(6px); }
 .cellf-login-dialog .cloud-access-footer { color: #536050; padding-bottom: 18px; }
 .cellf-login-close { position: absolute; z-index: 3; top: 12px; right: 12px; width: 40px; height: 40px; border: 0; border-radius: 50%; color: #fff; background: #101310; font-size: 26px; cursor: pointer; }
+@media (max-width: 1279px) {
+  .cellf-public-glass-transition { display: none; }
+}
 @media (max-width: 900px) {
   .cellf-public-hero { gap: 32px; }
   .cellf-service-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 600px) {
-  .cellf-public-header { top: 8px; width: calc(100% - 20px); padding: 12px; gap: 12px; border-radius: 20px; }
+  .cellf-public-header-stack { top: 8px; width: calc(100% - 20px); }
+  .cellf-public-header { padding: 12px; gap: 12px; border-radius: 20px; }
   .cellf-public-brand { width: 130px; }
   .cellf-public-header nav > a { display: none; }
   .cellf-login-trigger { gap: 16px; padding: 13px 19px; }
