@@ -23,6 +23,8 @@
     { "src": "/cellf-logo.png", "dest": "/public/cellf-logo.png" },
     { "src": "/cellf-logo-updated.png", "dest": "/public/cellf-logo-updated.png" },
     { "src": "/cellf-mark.png", "dest": "/public/cellf-mark.png" },
+    { "src": "/manifest.webmanifest", "dest": "/public/manifest.webmanifest", "headers": { "Content-Type": "application/manifest+json; charset=utf-8", "Cache-Control": "public, max-age=0, must-revalidate" } },
+    { "src": "/(favicon-32|apple-touch-icon|icon-192|icon-512)\\.png", "dest": "/public/$1.png", "headers": { "Content-Type": "image/png", "Cache-Control": "public, max-age=0, must-revalidate" } },
     { "src": "/.*", "dest": "/public/index.html" }
   ]
 }

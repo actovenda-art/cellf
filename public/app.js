@@ -1997,7 +1997,7 @@ function renderCloudAccess(mode = 'login', message = '') {
         <svg class="cellf-glass-filter" focusable="false">
           <defs>
             <filter id="cellf-glass-distortion" x="-20%" y="-50%" width="140%" height="200%" color-interpolation-filters="sRGB">
-              <feTurbulence type="fractalNoise" baseFrequency="0.12 0.12" numOctaves="1" seed="8" result="glass-noise"></feTurbulence>
+              <feTurbulence type="fractalNoise" baseFrequency="0.12 0.12" numOctaves="1" result="glass-noise"></feTurbulence>
               <feDisplacementMap in="SourceGraphic" in2="glass-noise" scale="30" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
             </filter>
           </defs>
