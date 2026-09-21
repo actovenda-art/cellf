@@ -1990,10 +1990,9 @@ function renderCloudAccess(mode = 'login', message = '') {
     <header class="cellf-public-header">
       <svg class="cellf-glass-filter" aria-hidden="true" focusable="false">
         <defs>
-          <filter id="cellf-glass-distortion" x="-20%" y="-40%" width="140%" height="180%" color-interpolation-filters="sRGB">
-            <feTurbulence type="fractalNoise" baseFrequency="0.012 0.075" numOctaves="2" seed="8" result="glass-noise"></feTurbulence>
-            <feGaussianBlur in="glass-noise" stdDeviation="0.45" result="soft-noise"></feGaussianBlur>
-            <feDisplacementMap in="SourceGraphic" in2="soft-noise" scale="24" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
+          <filter id="cellf-glass-distortion" x="-20%" y="-50%" width="140%" height="200%" color-interpolation-filters="sRGB">
+            <feTurbulence type="fractalNoise" baseFrequency="0.12 0.12" numOctaves="1" seed="8" result="glass-noise"></feTurbulence>
+            <feDisplacementMap in="SourceGraphic" in2="glass-noise" scale="30" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
           </filter>
         </defs>
       </svg>

@@ -2299,21 +2299,27 @@ body.cloud-auth-mode .content { display: block; padding: 0; }
 .cellf-glass-filter { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
 .cellf-distorted-glass {
   position: absolute;
-  z-index: -1;
-  inset: 0;
+  z-index: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 50px;
   overflow: hidden;
-  border-radius: inherit;
+  border: 1px solid rgba(245, 245, 245, .3);
+  border-radius: 0 0 23px 23px;
   pointer-events: none;
 }
 .cellf-distorted-glass::before {
   content: '';
   position: absolute;
-  inset: 1px;
+  inset: -18px -24px;
   border-radius: inherit;
   background:
-    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, .92), transparent 37%),
-    radial-gradient(circle at 82% 110%, rgba(0, 174, 239, .12), transparent 35%);
-  opacity: .82;
+    repeating-linear-gradient(177deg, transparent 0 4px, rgba(0, 107, 147, .2) 5px, rgba(255, 255, 255, .92) 6px, transparent 8px 13px),
+    repeating-linear-gradient(92deg, transparent 0 32px, rgba(0, 174, 239, .12) 34px, transparent 38px 64px);
+  filter: url('#cellf-glass-distortion');
+  opacity: .76;
+  transform: scale(1.08);
 }
 .cellf-distorted-glass::after {
   content: '';
@@ -2324,14 +2330,16 @@ body.cloud-auth-mode .content { display: block; padding: 0; }
 }
 .cellf-distorted-glass > span {
   position: absolute;
-  inset: -46% -8%;
-  background:
-    repeating-radial-gradient(ellipse at 50% 50%, rgba(255, 255, 255, .54) 0 1px, transparent 2px 11px),
-    linear-gradient(105deg, transparent 18%, rgba(255, 255, 255, .48) 43%, rgba(0, 174, 239, .09) 52%, transparent 72%);
+  inset: -20px -30px;
+  background: repeating-radial-gradient(
+    circle at 50% 50%,
+    rgba(255, 255, 255, 0) 0,
+    rgba(255, 255, 255, .2) 10px,
+    rgba(255, 255, 255, .98) 31px
+  );
+  background-size: 6px 6px;
   filter: url('#cellf-glass-distortion');
-  opacity: .34;
-  transform: translate3d(-2%, 0, 0) scale(1.08);
-  animation: cellf-glass-flow 12s ease-in-out infinite alternate;
+  opacity: .86;
 }
 .cellf-public-header > :not(.cellf-glass-filter, .cellf-distorted-glass) { position: relative; z-index: 1; }
 .cellf-public-brand { display: block; width: 170px; }
@@ -2407,10 +2415,6 @@ body.cloud-auth-mode .content { display: block; padding: 0; }
   .cellf-public-brand:hover { transform: scale(1.035); }
 }
 @keyframes cellf-enter { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes cellf-glass-flow {
-  from { transform: translate3d(-2%, 0, 0) scale(1.08); }
-  to { transform: translate3d(2%, 2%, 0) scale(1.12); }
-}
 @media (prefers-reduced-motion: no-preference) {
   html:has(.cellf-public-page) { scroll-behavior: smooth; }
   .cellf-hero-copy { animation: cellf-enter .6s ease both; }
@@ -2423,7 +2427,6 @@ body.cloud-auth-mode .content { display: block; padding: 0; }
 @media (prefers-reduced-motion: reduce) {
   .cellf-public-page *, .cellf-public-page *::after { animation: none !important; transition: none !important; }
   .cellf-public-page :is(article, img, a, button, span) { transform: none !important; }
-  .cellf-distorted-glass > span { transform: scale(1.08) !important; }
 }
 
 @media print {
