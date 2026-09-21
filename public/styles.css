@@ -2330,6 +2330,18 @@ body.cloud-auth-mode .content { display: block; padding: 0; }
   -webkit-backdrop-filter: blur(0);
   filter: url('#cellf-glass-distortion');
 }
+.cellf-distorted-glass::after {
+  content: '';
+  position: absolute;
+  inset: -20%;
+  background:
+    repeating-linear-gradient(103deg, transparent 0 10px, rgba(0, 107, 147, .13) 10px 11px, transparent 11px 24px),
+    repeating-linear-gradient(7deg, transparent 0 17px, rgba(16, 19, 16, .08) 17px 18px, transparent 18px 33px);
+  opacity: .42;
+  transform: skewX(-8deg) scale(1.08);
+  transform-origin: center;
+  mix-blend-mode: multiply;
+}
 .cellf-public-brand { position: relative; z-index: 1; display: block; width: 170px; }
 .cellf-public-brand img { display: block; width: 100%; height: auto; }
 .cellf-public-header nav { position: relative; z-index: 1; display: flex; align-items: center; gap: 32px; }
@@ -2369,7 +2381,10 @@ body.cloud-auth-mode .content { display: block; padding: 0; }
   .cellf-service-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 600px) {
-  .cellf-public-header { width: calc(100% - 20px); margin-top: 8px; padding: 12px; gap: 12px; border-radius: 20px; }
+  .cellf-public-header-stack { height: calc(73px + env(safe-area-inset-top)); }
+  .cellf-public-header { width: 100%; margin-top: 0; padding: calc(12px + env(safe-area-inset-top)) 16px 12px; gap: 12px; border-top: 0; border-radius: 0 0 20px 20px; }
+  .cellf-distorted-glass > span { opacity: .76; }
+  .cellf-distorted-glass::after { opacity: .58; }
   .cellf-public-brand { width: 130px; }
   .cellf-public-header nav > a { display: none; }
   .cellf-login-trigger { gap: 16px; padding: 13px 19px; }
@@ -2382,6 +2397,7 @@ body.cloud-auth-mode .content { display: block; padding: 0; }
   .cellf-service-grid { grid-template-columns: 1fr; }
   .cellf-service-grid h3 { margin-top: 20px; }
   .cellf-public-footer { padding: 28px 20px; }
+  .cellf-public-page { padding-top: calc(88px + env(safe-area-inset-top)); }
 }
 
 .cellf-public-page { padding-top: 112px; }
