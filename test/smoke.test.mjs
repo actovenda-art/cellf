@@ -74,6 +74,7 @@ test('os arquivos de interface e a logo oficial são entregues com o formato cor
     ['/app.js', 'text/javascript'],
     ['/cellf-logo-updated.png', 'image/png'],
     ['/cellf-mark.png', 'image/png'],
+    ['/cellf-distorted-glass.svg', 'image/svg+xml'],
     ['/favicon-32.png', 'image/png'],
     ['/apple-touch-icon.png', 'image/png'],
     ['/icon-192.png', 'image/png'],
