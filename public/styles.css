@@ -2299,7 +2299,7 @@ body.cloud-auth-mode .content { display: block; padding: 0; }
 .cellf-glass-filter { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
 .cellf-distorted-glass {
   position: absolute;
-  z-index: 0;
+  z-index: 2;
   right: 0;
   bottom: 0;
   left: 0;
@@ -2312,14 +2312,9 @@ body.cloud-auth-mode .content { display: block; padding: 0; }
 .cellf-distorted-glass::before {
   content: '';
   position: absolute;
-  inset: -18px -24px;
+  inset: 0;
   border-radius: inherit;
-  background:
-    repeating-linear-gradient(177deg, transparent 0 4px, rgba(0, 107, 147, .2) 5px, rgba(255, 255, 255, .92) 6px, transparent 8px 13px),
-    repeating-linear-gradient(92deg, transparent 0 32px, rgba(0, 174, 239, .12) 34px, transparent 38px 64px);
-  filter: url('#cellf-glass-distortion');
-  opacity: .76;
-  transform: scale(1.08);
+  background: rgba(10, 18, 18, .08);
 }
 .cellf-distorted-glass::after {
   content: '';
@@ -2330,16 +2325,19 @@ body.cloud-auth-mode .content { display: block; padding: 0; }
 }
 .cellf-distorted-glass > span {
   position: absolute;
-  inset: -20px -30px;
-  background: repeating-radial-gradient(
+  inset: 0;
+  background-color: rgba(0, 0, 0, .16);
+  background-image: repeating-radial-gradient(
     circle at 50% 50%,
     rgba(255, 255, 255, 0) 0,
     rgba(255, 255, 255, .2) 10px,
-    rgba(255, 255, 255, .98) 31px
+    rgba(255, 255, 255, .92) 31px
   );
   background-size: 6px 6px;
+  backdrop-filter: blur(0);
+  -webkit-backdrop-filter: blur(0);
   filter: url('#cellf-glass-distortion');
-  opacity: .86;
+  opacity: .78;
 }
 .cellf-public-header > :not(.cellf-glass-filter, .cellf-distorted-glass) { position: relative; z-index: 1; }
 .cellf-public-brand { display: block; width: 170px; }

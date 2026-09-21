@@ -73,13 +73,18 @@ test('os arquivos de interface e a logo oficial são entregues com o formato cor
     ['/styles.css', 'text/css'],
     ['/app.js', 'text/javascript'],
     ['/cellf-logo-updated.png', 'image/png'],
-    ['/cellf-mark.png', 'image/png']
+    ['/cellf-mark.png', 'image/png'],
+    ['/favicon-32.png', 'image/png'],
+    ['/apple-touch-icon.png', 'image/png'],
+    ['/icon-192.png', 'image/png'],
+    ['/icon-512.png', 'image/png'],
+    ['/manifest.webmanifest', 'application/manifest+json']
   ];
 
   await Promise.all(files.map(async ([path, type]) => {
     const response = await fetch(`${baseUrl}${path}`);
     assert.equal(response.status, 200, `${path} precisa estar disponível.`);
-    assert.match(response.headers.get('content-type'), new RegExp(`^${type}`));
+    assert.ok(response.headers.get('content-type')?.startsWith(type), `${path} precisa usar o tipo ${type}.`);
     assert.ok((await response.arrayBuffer()).byteLength > 0, `${path} não pode estar vazio.`);
   }));
 });

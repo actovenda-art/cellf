@@ -105,7 +105,8 @@ test('a logo oficial tem descrição acessível e também é usada como favicon'
   assert.match(logo?.alt ?? '', /Cellf.*Reparo e Comércio/iu);
   assert.ok(Number(logo?.width) > 0, 'A logo precisa declarar largura.');
   assert.ok(Number(logo?.height) > 0, 'A logo precisa declarar altura.');
-  assert.equal(favicon?.href, '/cellf-mark.png');
+  assert.equal(favicon?.href, '/favicon-32.png');
+  assert.equal(favicon?.sizes, '32x32');
   assert.equal(favicon?.type, 'image/png');
 });
 
