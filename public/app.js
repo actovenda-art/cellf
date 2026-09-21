@@ -1990,7 +1990,7 @@ function renderCloudAccess(mode = 'login', message = '') {
     <div class="cellf-public-header-stack">
       <header class="cellf-public-header">
         <div class="cellf-public-glass-transition" aria-hidden="true">
-          <div class="cellf-distorted-glass"><span></span></div>
+          <div class="cellf-distorted-glass"><span></span><img class="cellf-glass-texture" src="/cellf-distorted-glass.svg" alt="" width="1200" height="120"></div>
           <svg class="cellf-glass-filter" focusable="false">
             <defs>
               <filter id="cellf-glass-distortion" x="-20%" y="-50%" width="140%" height="200%" color-interpolation-filters="sRGB">

@@ -608,7 +608,8 @@ test('o vidro fragmentado permanece contido na barra superior também no celular
   assert.ok(glass > headerStart && glass < headerEnd, 'O efeito precisa estar dentro da barra superior.');
   assertProperty('.cellf-public-header', 'overflow', /^hidden$/iu);
   assertProperty('.cellf-public-glass-transition', 'inset', /^0$/iu);
-  assertProperty('.cellf-distorted-glass::after', 'background', /repeating-linear-gradient/iu);
+  assert.match(application, /class="cellf-glass-texture"[^>]+src="\/cellf-distorted-glass\.svg"/u);
+  assertProperty('.cellf-glass-texture', 'object-fit', /^fill$/iu);
   assertProperty('.cellf-public-header', 'width', /^100%$/iu, compact);
   assertProperty('.cellf-public-header', 'margin-top', /^0$/iu, compact);
 });

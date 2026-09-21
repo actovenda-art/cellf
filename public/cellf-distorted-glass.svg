@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 120" preserveAspectRatio="none">
+  <defs>
+    <filter id="organic-distortion" x="-8%" y="-45%" width="116%" height="190%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.006 0.085" numOctaves="2" seed="11" result="noise" />
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="38" xChannelSelector="R" yChannelSelector="B" />
+    </filter>
+    <linearGradient id="glass-line" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#006b93" stop-opacity="0.03" />
+      <stop offset="0.18" stop-color="#006b93" stop-opacity="0.22" />
+      <stop offset="0.52" stop-color="#101310" stop-opacity="0.12" />
+      <stop offset="0.82" stop-color="#006b93" stop-opacity="0.18" />
+      <stop offset="1" stop-color="#006b93" stop-opacity="0.03" />
+    </linearGradient>
+  </defs>
+  <g fill="none" stroke="url(#glass-line)" stroke-linecap="round" filter="url(#organic-distortion)">
+    <path d="M-70 13 C95 2 170 24 330 12 S565 5 720 17 S1010 2 1270 14" stroke-width="1.2" stroke-dasharray="42 9 7 18" />
+    <path d="M-60 25 C75 36 205 13 350 27 S590 37 755 23 S1035 36 1260 25" stroke-width="0.8" stroke-dasharray="18 7 64 13" />
+    <path d="M-80 39 C100 25 215 53 375 38 S625 28 790 44 S1030 27 1280 41" stroke-width="1.35" stroke-dasharray="74 12 5 21" />
+    <path d="M-50 53 C90 63 230 39 400 55 S650 65 835 50 S1080 64 1250 54" stroke-width="0.75" stroke-dasharray="25 10 48 8" />
+    <path d="M-90 67 C80 49 245 82 420 65 S690 54 855 72 S1060 56 1290 68" stroke-width="1.5" stroke-dasharray="54 8 11 25" />
+    <path d="M-60 82 C105 94 255 68 445 84 S705 95 900 78 S1100 93 1260 83" stroke-width="0.9" stroke-dasharray="33 14 71 9" />
+    <path d="M-80 97 C75 81 230 109 395 96 S665 84 825 102 S1055 85 1280 98" stroke-width="1.25" stroke-dasharray="66 11 8 17" />
+    <path d="M-50 111 C115 122 270 98 455 113 S740 122 910 108 S1110 120 1250 112" stroke-width="0.7" stroke-dasharray="21 8 52 15" />
+  </g>
+</svg>

@@ -2330,16 +2330,14 @@ body.cloud-auth-mode .content { display: block; padding: 0; }
   -webkit-backdrop-filter: blur(0);
   filter: url('#cellf-glass-distortion');
 }
-.cellf-distorted-glass::after {
-  content: '';
+.cellf-glass-texture {
   position: absolute;
-  inset: -20%;
-  background:
-    repeating-linear-gradient(103deg, transparent 0 10px, rgba(0, 107, 147, .13) 10px 11px, transparent 11px 24px),
-    repeating-linear-gradient(7deg, transparent 0 17px, rgba(16, 19, 16, .08) 17px 18px, transparent 18px 33px);
-  opacity: .42;
-  transform: skewX(-8deg) scale(1.08);
-  transform-origin: center;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  opacity: .62;
   mix-blend-mode: multiply;
 }
 .cellf-public-brand { position: relative; z-index: 1; display: block; width: 170px; }
@@ -2384,7 +2382,7 @@ body.cloud-auth-mode .content { display: block; padding: 0; }
   .cellf-public-header-stack { height: calc(73px + env(safe-area-inset-top)); }
   .cellf-public-header { width: 100%; margin-top: 0; padding: calc(12px + env(safe-area-inset-top)) 16px 12px; gap: 12px; border-top: 0; border-radius: 0 0 20px 20px; }
   .cellf-distorted-glass > span { opacity: .76; }
-  .cellf-distorted-glass::after { opacity: .58; }
+  .cellf-glass-texture { opacity: .78; }
   .cellf-public-brand { width: 130px; }
   .cellf-public-header nav > a { display: none; }
   .cellf-login-trigger { gap: 16px; padding: 13px 19px; }
