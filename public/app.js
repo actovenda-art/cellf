@@ -1988,6 +1988,16 @@ function renderCloudAccess(mode = 'login', message = '') {
   setShellAccess(false);
   content.innerHTML = `<div class="cellf-public-page">
     <header class="cellf-public-header">
+      <svg class="cellf-glass-filter" aria-hidden="true" focusable="false">
+        <defs>
+          <filter id="cellf-glass-distortion" x="-20%" y="-40%" width="140%" height="180%" color-interpolation-filters="sRGB">
+            <feTurbulence type="fractalNoise" baseFrequency="0.012 0.075" numOctaves="2" seed="8" result="glass-noise"></feTurbulence>
+            <feGaussianBlur in="glass-noise" stdDeviation="0.45" result="soft-noise"></feGaussianBlur>
+            <feDisplacementMap in="SourceGraphic" in2="soft-noise" scale="24" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
+          </filter>
+        </defs>
+      </svg>
+      <span class="cellf-distorted-glass" aria-hidden="true"><span></span></span>
       <a class="cellf-public-brand" href="#" aria-label="CELLF — início"><img src="/cellf-logo-updated.png" alt="CELLF" width="2172" height="724"></a>
       <nav aria-label="Navegação da apresentação"><a href="#cellf-services">Nossos serviços</a><button class="cellf-login-trigger" id="open-cellf-login" type="button" aria-haspopup="dialog" aria-controls="cellf-login-dialog">Login <span aria-hidden="true">↗</span></button></nav>
     </header>
