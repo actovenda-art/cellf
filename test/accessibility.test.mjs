@@ -101,7 +101,7 @@ test('a logo oficial tem descrição acessível e também é usada como favicon'
   const logo = openingTags('img').find(attributes => hasClass(attributes, 'brand-logo'));
   const favicon = openingTags('link').find(attributes => attributes.rel === 'icon');
 
-  assert.equal(logo?.src, '/cellf-logo-updated.png');
+  assert.equal(logo?.src, '/cellf-logo-brand.svg');
   assert.match(logo?.alt ?? '', /Cellf.*Reparo e Comércio/iu);
   assert.ok(Number(logo?.width) > 0, 'A logo precisa declarar largura.');
   assert.ok(Number(logo?.height) > 0, 'A logo precisa declarar altura.');

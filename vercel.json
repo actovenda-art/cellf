@@ -22,6 +22,7 @@
     { "src": "/app.js", "dest": "/public/app.js" },
     { "src": "/cellf-logo.png", "dest": "/public/cellf-logo.png" },
     { "src": "/cellf-logo-updated.png", "dest": "/public/cellf-logo-updated.png" },
+    { "src": "/cellf-logo-brand.svg", "dest": "/public/cellf-logo-brand.svg", "headers": { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=0, must-revalidate" } },
     { "src": "/cellf-mark.png", "dest": "/public/cellf-mark.png" },
     { "src": "/cellf-distorted-glass.svg", "dest": "/public/cellf-distorted-glass.svg", "headers": { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=0, must-revalidate" } },
     { "src": "/manifest.webmanifest", "dest": "/public/manifest.webmanifest", "headers": { "Content-Type": "application/manifest+json; charset=utf-8", "Cache-Control": "public, max-age=0, must-revalidate" } },

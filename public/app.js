@@ -2186,7 +2186,7 @@ function renderCloudAccess(mode = 'login', message = '') {
             </defs>
           </svg>
         </div>
-        <a class="cellf-public-brand" href="#" aria-label="CELLF — início"><img src="/cellf-logo-updated.png" alt="CELLF" width="2172" height="724"></a>
+        <a class="cellf-public-brand" href="#" aria-label="CELLF — início"><img src="/cellf-logo-brand.svg" alt="CELLF" width="1135" height="343"></a>
         <nav aria-label="Navegação da apresentação"><a href="#cellf-services">Nossos serviços</a><button class="cellf-login-trigger" id="open-cellf-login" type="button" aria-haspopup="dialog" aria-controls="cellf-login-dialog">Login <span aria-hidden="true">↗</span></button></nav>
       </header>
     </div>
@@ -2203,7 +2203,7 @@ function renderCloudAccess(mode = 'login', message = '') {
     <footer class="cellf-public-footer"><strong>CELLF <span>Reparo e Comércio</span></strong><p>Tecnologia que faz parte do seu dia.</p><a href="#">Voltar ao topo ↑</a></footer>
     <dialog class="cellf-login-dialog" id="cellf-login-dialog" aria-labelledby="cloud-access-title"><button class="cellf-login-close" id="close-cellf-login" type="button" aria-label="Fechar login">×</button><section class="cloud-access-screen" aria-labelledby="cloud-access-title">
     <div class="cloud-access-card">
-      <div class="cloud-brand"><img src="/cellf-logo-updated.png" alt="Cellf — Reparo e Comércio" width="2172" height="724"></div>
+      <div class="cloud-brand"><img src="/cellf-logo-brand.svg" alt="Cellf — Reparo e Comércio" width="1135" height="343"></div>
       <div class="cloud-access-body">
         <div class="cloud-access-heading"><span class="cloud-access-kicker">ACESSO SEGURO</span><h1 id="cloud-access-title">${esc(title)}</h1>${description ? `<p>${esc(description)}</p>` : ''}</div>
         ${login ? `<form id="cloud-login-form" class="cloud-login-form" method="post" autocomplete="on">

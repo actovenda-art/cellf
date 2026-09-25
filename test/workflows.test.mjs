@@ -1412,7 +1412,7 @@ test('a tela de login mostra a identidade oficial Cellf e um formulário de e-ma
 
   const markup = document.querySelector('#app-content').innerHTML;
   assert.match(markup, /class="cloud-access-screen"/u);
-  assert.match(markup, /<img\b[^>]*src="\/cellf-logo-updated\.png"[^>]*alt="Cellf — Reparo e Comércio"/u);
+  assert.match(markup, /<img\b[^>]*src="\/cellf-logo-brand\.svg"[^>]*alt="Cellf — Reparo e Comércio"/u);
   assert.match(markup, /<h1\b[^>]*id="cloud-access-title"[^>]*>Acesse sua conta<\/h1>/u);
   assert.doesNotMatch(markup, /Entre para acessar os dados e documentos da sua empresa/iu);
   assert.match(markup, /<form\b[^>]*id="cloud-login-form"[^>]*method="post"/u);

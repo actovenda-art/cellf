@@ -33,7 +33,7 @@ button { cursor: pointer; }
 .app-shell { min-height: 100vh; display: grid; grid-template-columns: 248px minmax(0, 1fr); }
 .sidebar { position: fixed; z-index: 30; width: 248px; height: 100vh; background: var(--ink); color: #fff; padding: 26px 18px 18px; display: flex; flex-direction: column; }
 .brand { overflow: hidden; margin: 0 0 28px; border-radius: 14px; background: var(--accent); }
-.brand-logo { display: block; width: 100%; height: auto; aspect-ratio: 16 / 5; object-fit: cover; object-position: center; }
+.brand-logo { display: block; width: 100%; height: auto; aspect-ratio: 1135 / 343; object-fit: contain; object-position: center; }
 .main-nav { display: flex; flex-direction: column; gap: 4px; }
 .nav-label { margin: 23px 12px 9px; color: #686e6a; font-size: 9px; font-weight: 800; letter-spacing: .14em; }
 .nav-item { width: 100%; min-height: 43px; border: 0; color: #aeb3af; background: transparent; border-radius: 11px; display: flex; align-items: center; gap: 12px; padding: 0 12px; text-align: left; font-size: 13px; transition: .18s ease; }
@@ -322,7 +322,7 @@ button:disabled, input:disabled, select:disabled { cursor: not-allowed; opacity:
   box-shadow: 0 12px 36px rgba(0, 0, 0, .2);
 }
 
-.brand-logo { aspect-ratio: 16 / 5.5; }
+.brand-logo { aspect-ratio: 1135 / 343; padding: 8px 10px; }
 
 .brand-caption {
   display: block;
