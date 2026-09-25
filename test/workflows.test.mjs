@@ -28,6 +28,7 @@ const exposedApplication = application.slice(0, bootstrap) + '\n' + [
   '  renderCompanyDocuments, handleCompanyDocumentUpload,',
   '  downloadCompanyDocument, removeCompanyDocument,',
   '  customerOrders, customerSales, createDeliveryRecord, syncRepairDeliveries, completeOrderDeliveries, recordActivity,',
+  '  orderParts, orderPartsCost, updateOrderPartReservation,',
   '  cartSubtotal, cartTotal, addCartProduct, completeSale,',
   '  agendaEvents, withinPeriod, reportData, renderSales, renderDeliveries, renderReports,',
   '  commandSearch, refreshBadges, syncShell, toggleMenu, closeMenu, navigate',
@@ -549,6 +550,33 @@ test('a normalização torna buscas insensíveis a acentos e maiúsculas', () =>
   assert.equal(api.normalize('ÇÃÕ ÉÍÚ'), 'cao eiu');
   assert.equal(api.initials('cliente de teste'), 'CD');
   assert.equal(api.initials(''), 'C');
+});
+
+test('peças da ordem são reservadas na aprovação e devolvidas no cancelamento', () => {
+  const { api } = createApplication();
+  const order = { id: 'OS-PECA-01', parts: [], partsReserved: false };
+  const parts = [{ productId: 'produto-capa', name: 'Capa de proteção', sku: 'CAPA-01', quantity: 2, cost: 20 }];
+
+  assert.equal(api.updateOrderPartReservation(order, parts, true), '');
+  order.parts = parts;
+  order.partsReserved = true;
+  assert.equal(api.state.products.find(product => product.id === 'produto-capa').stock, 1);
+  assert.equal(api.state.stockMovements[0].type, 'out');
+  assert.equal(api.orderPartsCost(parts), 40);
+
+  assert.equal(api.updateOrderPartReservation(order, parts, false), '');
+  assert.equal(api.state.products.find(product => product.id === 'produto-capa').stock, 3);
+  assert.equal(api.state.stockMovements[0].type, 'in');
+});
+
+test('reserva de peças impede aprovar quantidade acima do estoque', () => {
+  const { api } = createApplication();
+  const order = { id: 'OS-PECA-02', parts: [], partsReserved: false };
+  const parts = [{ productId: 'produto-cabo', name: 'Cabo reforçado', sku: 'CABO-01', quantity: 3, cost: 12 }];
+
+  assert.match(api.updateOrderPartReservation(order, parts, true), /Estoque insuficiente/u);
+  assert.equal(api.state.products.find(product => product.id === 'produto-cabo').stock, 2);
+  assert.equal(api.state.stockMovements.length, 0);
 });
 
 test('adicionar produtos reserva quantidades e registra preço e custo corretamente', () => {

@@ -5,7 +5,7 @@ Sistema de gestão para assistência técnica e comércio de celulares, com iden
 ## Módulos disponíveis
 
 - **Visão geral:** indicadores operacionais, meta diária, ordens recentes, estoque e lembretes.
-- **Ordens de serviço:** orçamento com aprovação, mesa técnica por etapa, catálogo com preenchimento automático, checklist de entrada, condições do aparelho, acessórios, fotos privadas, IMEI, prazos, garantia e acompanhamento de status.
+- **Ordens de serviço:** orçamento com aprovação, mesa técnica por etapa, catálogo com preenchimento automático, peças vinculadas com reserva e devolução automática do estoque, checklist de entrada, condições do aparelho, acessórios, fotos privadas, IMEI, prazos, garantia e acompanhamento de status.
 - **Clientes:** cadastro, dados de contato e histórico de atendimento.
 - **Agenda:** organização dos compromissos e da rotina da assistência.
 - **Produtos e estoque:** preços, custos, SKU, estoque mínimo e movimentações.

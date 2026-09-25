@@ -12,7 +12,11 @@ test('ordens reúnem orçamento, checklist, descrição técnica e evidências',
   assert.match(app, /name="technicalDescription"/u);
   assert.match(app, /name="deviceCondition"/u);
   assert.match(app, /data-action="add-order-photo"/u);
+  assert.match(app, /Peças e produtos utilizados/u);
+  assert.match(app, /function updateOrderPartReservation/u);
+  assert.match(app, /partsReserved/u);
   assert.match(css, /\.device-checklist/u);
+  assert.match(css, /\.order-parts-list/u);
   assert.match(css, /\.photo-evidence-list/u);
 });
 
