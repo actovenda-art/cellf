@@ -4,18 +4,18 @@ Sistema de gestão para assistência técnica e comércio de celulares, com iden
 
 ## Módulos disponíveis
 
-- **Visão geral:** indicadores operacionais, ordens recentes, estoque e lembretes.
-- **Ordens de serviço:** clientes, aparelhos, IMEI, defeitos, prazos e acompanhamento de status.
+- **Visão geral:** indicadores operacionais, meta diária, ordens recentes, estoque e lembretes.
+- **Ordens de serviço:** orçamento com aprovação, mesa técnica por etapa, catálogo com preenchimento automático, checklist de entrada, condições do aparelho, acessórios, fotos privadas, IMEI, prazos, garantia e acompanhamento de status.
 - **Clientes:** cadastro, dados de contato e histórico de atendimento.
 - **Agenda:** organização dos compromissos e da rotina da assistência.
 - **Produtos e estoque:** preços, custos, SKU, estoque mínimo e movimentações.
-- **Serviços:** catálogo de reparos com preços definidos ou sob consulta.
+- **Serviços:** catálogo de reparos com preço, custo, duração, garantia e descrição técnica padrão.
 - **Vendas / PDV:** atendimento de balcão, registro de vendas e cobrança segura pelo Stripe Checkout.
 - **Contas a pagar:** controle de vencimentos e confirmação de pagamentos.
-- **Relatórios:** indicadores de desempenho e acompanhamento da operação.
+- **Relatórios:** lucro real, margens, produtividade, conversão de orçamentos, oportunidades pendentes e valores recusados.
 - **Configurações:** sub-abas Empresa, Administrador, Documentos, Operação, Avisos e Privacidade, reunindo nome, slogan, CNPJ, responsável, endereço, anexos empresariais e preferências da loja em um único formulário.
 
-A plataforma também oferece busca global, notificações, consulta de IMEI por proxy seguro e navegação adaptada para computador, tablet e celular.
+A plataforma também oferece busca global, notificações, consulta de IMEI por proxy seguro, mensagens de WhatsApp por etapa, pós-venda com link para avaliação no Google e documentos profissionais em A4, bobina térmica de 80 mm e etiqueta de 58 mm. A impressão do navegador permite salvar orçamento e ordem de serviço em PDF. Toda a navegação é adaptada para computador, tablet e celular.
 
 ## Como rodar
 
@@ -57,7 +57,7 @@ Os testes verificam também a autenticação, a persistência remota, as políti
 3. Opcionalmente, personalize `SUPABASE_STATE_ID` e `SUPABASE_DOCUMENT_BUCKET` se precisar separar ambientes ou alterar o nome do bucket.
 4. Reinicie o servidor e faça login com o e-mail e a senha configurados.
 
-O navegador conversa apenas com as rotas `/api/session`, `/api/state` e `/api/documents`; a chave privilegiada permanece no servidor. A sessão é protegida por um cookie assinado `HttpOnly`, e os documentos são enviados e baixados por URLs assinadas com validade limitada.
+O navegador conversa apenas com as rotas `/api/session`, `/api/state` e `/api/documents`; a chave privilegiada permanece no servidor. A sessão é protegida por um cookie assinado `HttpOnly`, e documentos e fotos das ordens são enviados e baixados por URLs assinadas com validade limitada.
 
 ### Publicação na Vercel
 

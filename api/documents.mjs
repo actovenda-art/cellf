@@ -32,8 +32,16 @@ function validatedId(value) {
   return id;
 }
 
-function documentPath(id) {
-  return 'company/' + validatedId(id);
+function validatedScope(value) {
+  const scope = typeof value === 'string' && value.trim() ? value.trim() : 'company';
+  if (!['company', 'orders'].includes(scope)) {
+    throw new ApiError(400, 'INVALID_DOCUMENT_SCOPE', 'A categoria do arquivo é inválida.');
+  }
+  return scope;
+}
+
+function documentPath(scope, id) {
+  return validatedScope(scope) + '/' + validatedId(id);
 }
 
 function encodedObjectPath(config, path) {
@@ -89,7 +97,8 @@ function validateUpload(value) {
     throw new ApiError(400, 'INVALID_DOCUMENT_SIZE', 'O documento deve ter entre 1 byte e 10 MB.');
   }
 
-  return { id, fileName, contentType, size, path: documentPath(id) };
+  const scope = validatedScope(value.scope);
+  return { id, scope, fileName, contentType, size, path: documentPath(scope, id) };
 }
 
 export default async function handler(request, response) {
@@ -124,7 +133,8 @@ export default async function handler(request, response) {
     }
 
     const id = validatedId(queryValue(request, 'id'));
-    const path = documentPath(id);
+    const scope = validatedScope(queryValue(request, 'scope'));
+    const path = documentPath(scope, id);
 
     if (method === 'GET') {
       if (queryValue(request, 'operation') !== 'download-url') {

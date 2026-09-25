@@ -3,6 +3,15 @@ const APPOINTMENT_LABELS = { repair: 'Reparo', delivery: 'Entrega', consultation
 const ATTENDANCE_LABELS = { delivery: 'Entrega', pickup_return: 'Serviço Busca e Leva', counter_sale: 'Venda balcão', in_store_service: 'Serviço em loja' };
 const DELIVERY_KIND_LABELS = { sale_delivery: 'Entrega de compra', repair_pickup: 'Busca de aparelho', repair_return: 'Devolução do reparo' };
 const DELIVERY_STATUS_LABELS = { scheduled: 'Agendada', in_transit: 'Em andamento', completed: 'Concluída', cancelled: 'Cancelada' };
+const QUOTE_STATUS_LABELS = { pending: 'Aguardando aprovação', approved: 'Aprovado', rejected: 'Recusado' };
+const DEVICE_CHECKLIST = [
+  ['screen', 'Tela e touch'],
+  ['cameras', 'Câmeras'],
+  ['audio', 'Áudio e microfone'],
+  ['buttons', 'Botões'],
+  ['charging', 'Conector de carga'],
+  ['biometrics', 'Biometria / Face ID']
+];
 const OPERATIONAL_DATA_VERSION = 'controle-cellf-2026-09-v1';
 const ANONYMOUS_CUSTOMER = 'Cliente sem identificação';
 const SETTINGS_TABS = [
@@ -117,6 +126,8 @@ const seed = {
     closingTime: '18:00',
     warrantyDays: 90,
     defaultDeadlineDays: 2,
+    dailyRevenueGoal: 500,
+    googleReviewUrl: '',
     lowStockAlert: true,
     dueDateAlert: true,
     appointmentAlert: true,
@@ -183,7 +194,16 @@ function loadState(source = null, { applyOperationalImport = false } = {}) {
       ...stored,
       products: Array.isArray(stored.products) ? stored.products : structuredClone(seed.products),
       services: Array.isArray(stored.services) ? stored.services : structuredClone(seed.services),
-      orders: (Array.isArray(stored.orders) ? stored.orders : structuredClone(seed.orders)).map(order => ({ ...order, attendanceType: order.attendanceType === 'pickup_return' ? 'pickup_return' : 'in_store_service' })),
+      orders: (Array.isArray(stored.orders) ? stored.orders : structuredClone(seed.orders)).map(order => ({
+        ...order,
+        attendanceType: order.attendanceType === 'pickup_return' ? 'pickup_return' : 'in_store_service',
+        quoteStatus: order.quoteStatus || (order.status === 'cancelled' ? 'rejected' : ['approved', 'progress', 'ready', 'delivered'].includes(order.status) ? 'approved' : 'pending'),
+        technicalDescription: order.technicalDescription || '',
+        deviceCondition: order.deviceCondition || '',
+        accessories: order.accessories || '',
+        checklist: order.checklist && typeof order.checklist === 'object' ? order.checklist : {},
+        photos: Array.isArray(order.photos) ? order.photos : []
+      })),
       payables: Array.isArray(stored.payables) ? stored.payables : structuredClone(seed.payables),
       customers: Array.isArray(stored.customers) ? stored.customers.map(removeCustomerAddressData) : [],
       sales: Array.isArray(stored.sales) ? stored.sales.map(sale => ({ ...sale, attendanceType: sale.attendanceType === 'delivery' ? 'delivery' : 'counter_sale' })) : [],
@@ -479,12 +499,12 @@ function validateCompanyDocument(file) {
 function companyDocumentStorageAvailable() {
   return cloudConnection.authenticated && !['locked', 'connecting', 'unconfigured'].includes(cloudConnection.status);
 }
-async function saveCompanyDocument(id, file) {
+async function saveCompanyDocument(id, file, scope = 'company') {
   const contentType = file.type || 'application/octet-stream';
   const upload = await apiRequest('/api/documents?operation=upload-url', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id, fileName: file.name, contentType, size: Number(file.size) })
+    body: JSON.stringify({ scope, id, fileName: file.name, contentType, size: Number(file.size) })
   });
   if (!upload.signedUrl || !upload.path) throw new Error('O servidor não forneceu um endereço seguro para enviar o documento.');
   const response = await fetch(upload.signedUrl, {
@@ -499,13 +519,16 @@ async function saveCompanyDocument(id, file) {
   }
   return { signedUrl: upload.signedUrl, path: upload.path };
 }
-async function readCompanyDocument(id) {
-  const result = await apiRequest(`/api/documents?operation=download-url&id=${encodeURIComponent(id)}`);
+async function readCompanyDocument(id, scope = 'company') {
+  const result = await apiRequest(`/api/documents?operation=download-url&scope=${encodeURIComponent(scope)}&id=${encodeURIComponent(id)}`);
   if (!result.signedUrl) throw new Error('O servidor não forneceu um link seguro para baixar o documento.');
   return result.signedUrl;
 }
-async function deleteCompanyDocument(id) {
-  return apiRequest(`/api/documents?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+async function deleteCompanyDocument(id, scope = 'company') {
+  const endpoint = scope === 'company'
+    ? `/api/documents?id=${encodeURIComponent(id)}`
+    : `/api/documents?scope=${encodeURIComponent(scope)}&id=${encodeURIComponent(id)}`;
+  return apiRequest(endpoint, { method: 'DELETE' });
 }
 function sum(records, field = 'amount') { return records.reduce((total, record) => total + Number(record[field] || 0), 0); }
 function customerOrders(customer) {
@@ -606,6 +629,10 @@ function renderDashboard() {
   const openPayables = state.payables.filter(payable => !payable.paid);
   const payable = sum(openPayables);
   const todaySales = state.sales.filter(sale => String(sale.createdAt).slice(0, 10) === today && sale.status === 'paid');
+  const todayServices = state.orders.filter(order => order.status === 'delivered' && String(order.deliveredAt || order.createdAt).slice(0, 10) === today);
+  const todayRevenue = sum(todaySales, 'total') + sum(todayServices, 'value');
+  const dailyGoal = Number(state.settings.dailyRevenueGoal || 0);
+  const goalProgress = dailyGoal ? Math.min(Math.round((todayRevenue / dailyGoal) * 100), 999) : 0;
   const recentOrders = [...state.orders].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 5);
   const reminders = state.orders.filter(order => order.reminderAt && order.reminder).sort((a, b) => a.reminderAt.localeCompare(b.reminderAt)).slice(0, 3);
   const appointmentCount = state.appointments.filter(appointment => appointment.date === today && appointment.status !== 'cancelled').length;
@@ -614,7 +641,7 @@ function renderDashboard() {
     <div class="stats-grid">
       ${statCard('ORDENS EM ANDAMENTO', active.length, '⌁', `${active.filter(order => order.dueAt < today).length} com prazo vencido`, true)}
       ${statCard('PRONTAS PARA RETIRADA', ready.length, '✓', ready.length ? 'Aguardando contato com os clientes' : 'Nenhum aparelho aguardando')}
-      ${statCard('VENDAS DE HOJE', brl.format(sum(todaySales, 'total')), '↗', `${todaySales.length} ${todaySales.length === 1 ? 'venda concluída' : 'vendas concluídas'}`)}
+      ${statCard('FATURAMENTO DE HOJE', brl.format(todayRevenue), '↗', dailyGoal ? `${goalProgress}% da meta de ${brl.format(dailyGoal)}` : `${todaySales.length} vendas · ${todayServices.length} serviços`)}
       ${statCard('CONTAS EM ABERTO', brl.format(payable), '↘', `${openPayables.filter(item => item.dueAt < today).length} vencidas · ${openPayables.length} no total`)}
     </div>
     <section class="quick-actions" aria-label="Ações rápidas">
@@ -723,18 +750,23 @@ function renderOrders() {
   const open = state.orders.filter(order => !['delivered', 'cancelled'].includes(order.status));
   const overdue = open.filter(order => order.dueAt < isoToday());
   const completed = state.orders.filter(order => order.status === 'delivered');
+  const quotes = state.orders.filter(order => order.value != null && order.quoteStatus);
+  const approvedQuotes = quotes.filter(order => order.quoteStatus === 'approved');
+  const pendingQuotes = quotes.filter(order => order.quoteStatus === 'pending');
+  const conversion = quotes.length ? Math.round((approvedQuotes.length / quotes.length) * 100) : 0;
   content.innerHTML = `${pageHeading('ASSISTÊNCIA TÉCNICA', 'Ordens de serviço', `${open.length} ordens em acompanhamento`, '<button class="ghost-button" data-view="agenda">◷ Agenda de entregas</button><button class="primary-button" data-action="new-order">＋ Nova ordem</button>')}
-  <div class="summary-strip insight-grid">${statCard('EM ANÁLISE', state.orders.filter(order => order.status === 'analysis').length, '⌕', 'Aguardando diagnóstico')}${statCard('EM REPARO', state.orders.filter(order => ['approved', 'progress'].includes(order.status)).length, '⌁', `${overdue.length} com prazo vencido`)}${statCard('PRONTAS', state.orders.filter(order => order.status === 'ready').length, '✓', 'Disponíveis para retirada')}${statCard('VALOR EM ABERTO', brl.format(sum(open, 'value')), '↗', `${completed.length} já entregues`)}</div>
-  ${tableShell('orders', `<option value="">Todos os status</option><option value="overdue">Prazo vencido</option>${Object.entries(statusMap).map(([value, [label]]) => `<option value="${value}">${label}</option>`).join('')}`, orderRows(state.orders), orderMobile(state.orders), state.orders.length)}`;
+  <div class="summary-strip insight-grid">${statCard('EM ANÁLISE', state.orders.filter(order => order.status === 'analysis').length, '⌕', 'Aguardando diagnóstico')}${statCard('CONVERSÃO DE ORÇAMENTOS', `${conversion}%`, '↗', `${approvedQuotes.length} aprovados · ${pendingQuotes.length} pendentes`)}${statCard('PRONTAS', state.orders.filter(order => order.status === 'ready').length, '✓', 'Disponíveis para retirada')}${statCard('VALOR EM ABERTO', brl.format(sum(open, 'value')), '⌁', `${overdue.length} com prazo vencido · ${completed.length} entregues`)}</div>
+  <section class="repair-bench" aria-labelledby="repair-bench-title"><header><div><p class="eyebrow">MESA TÉCNICA</p><h2 id="repair-bench-title">Fluxo da bancada</h2></div><small>Abra uma ordem para consultar checklist, fotos e orçamento</small></header><div class="repair-bench-grid">${[['analysis','Em análise'],['waiting','Aguardando'],['progress','Em reparo'],['ready','Prontos']].map(([status, label]) => { const items = state.orders.filter(order => order.status === status || status === 'progress' && order.status === 'approved'); return `<div class="bench-column"><div class="bench-column-heading"><strong>${label}</strong><span>${items.length}</span></div>${items.length ? items.slice(0, 4).map(order => `<button data-action="view-order" data-id="${esc(order.id)}"><strong>${esc(order.device)}</strong><small>${esc(order.customer)} · ${esc(order.id)}</small><span>${order.value == null ? 'A consultar' : brl.format(order.value)}</span></button>`).join('') : '<p>Nenhuma ordem</p>'}</div>`; }).join('')}</div></section>
+  ${tableShell('orders', `<option value="">Todos os status</option><option value="quote-pending">Orçamento pendente</option><option value="quote-approved">Orçamento aprovado</option><option value="quote-rejected">Orçamento recusado</option><option value="overdue">Prazo vencido</option>${Object.entries(statusMap).map(([value, [label]]) => `<option value="${value}">${label}</option>`).join('')}`, orderRows(state.orders), orderMobile(state.orders), state.orders.length)}`;
   bindTableFilter('orders');
 }
 function orderRows(list) {
   return `<thead><tr><th>ORDEM / CLIENTE</th><th>APARELHO</th><th>SERVIÇO</th><th>PREVISÃO</th><th>VALOR</th><th>STATUS</th><th><span class="sr-only">Ações</span></th></tr></thead><tbody>${list.length ? list.map(order => {
     const overdue = order.dueAt < isoToday() && !['delivered', 'cancelled'].includes(order.status);
-    return `<tr><td><div class="cell-main"><span class="product-thumb">${esc(order.id.slice(-2))}</span><span><strong>${esc(order.customer)}</strong><small>${esc(order.id)} · ${esc(ATTENDANCE_LABELS[order.attendanceType] || ATTENDANCE_LABELS.in_store_service)}</small></span></div></td><td><strong>${esc(order.device)}</strong><br><small>${esc(order.issue)}</small></td><td>${esc(serviceName(order.serviceId))}</td><td><span class="${overdue ? 'text-danger' : ''}">${formatDate(order.dueAt)}</span>${overdue ? '<br><small class="text-danger">Prazo vencido</small>' : ''}</td><td class="money">${order.value == null ? 'A consultar' : brl.format(order.value)}</td><td><select class="inline-status" data-action="order-status" data-id="${esc(order.id)}" aria-label="Status da ordem ${esc(order.id)}">${Object.entries(statusMap).map(([value, [label]]) => `<option value="${value}" ${order.status === value ? 'selected' : ''}>${label}</option>`).join('')}</select></td><td><button class="more-button" data-action="view-order" data-id="${esc(order.id)}" aria-label="Ver ordem ${esc(order.id)}">•••</button></td></tr>`;
+    return `<tr><td><div class="cell-main"><span class="product-thumb">${esc(order.id.slice(-2))}</span><span><strong>${esc(order.customer)}</strong><small>${esc(order.id)} · ${esc(ATTENDANCE_LABELS[order.attendanceType] || ATTENDANCE_LABELS.in_store_service)}</small></span></div></td><td><strong>${esc(order.device)}</strong><br><small>${esc(order.issue)}</small></td><td>${esc(serviceName(order.serviceId))}<br><span class="quote-pill quote-${esc(order.quoteStatus || 'pending')}">${esc(QUOTE_STATUS_LABELS[order.quoteStatus] || QUOTE_STATUS_LABELS.pending)}</span></td><td><span class="${overdue ? 'text-danger' : ''}">${formatDate(order.dueAt)}</span>${overdue ? '<br><small class="text-danger">Prazo vencido</small>' : ''}</td><td class="money">${order.value == null ? 'A consultar' : brl.format(order.value)}</td><td><select class="inline-status" data-action="order-status" data-id="${esc(order.id)}" aria-label="Status da ordem ${esc(order.id)}">${Object.entries(statusMap).map(([value, [label]]) => `<option value="${value}" ${order.status === value ? 'selected' : ''}>${label}</option>`).join('')}</select></td><td><button class="more-button" data-action="view-order" data-id="${esc(order.id)}" aria-label="Ver ordem ${esc(order.id)}">•••</button></td></tr>`;
   }).join('') : '<tr><td colspan="7"><div class="table-empty">Nenhuma ordem encontrada.</div></td></tr>'}</tbody>`;
 }
-function orderMobile(list) { return list.map(order => `<article class="mobile-card"><div class="mobile-card-top"><div><strong>${esc(order.customer)}</strong><small>${esc(order.id)} · ${esc(order.device)}</small></div><button class="more-button" data-action="view-order" data-id="${esc(order.id)}" aria-label="Ver ordem">•••</button></div><div class="mobile-card-bottom"><span class="status order-status ${statusMap[order.status]?.[1] || 'waiting'}" title="${esc(statusLabel(order.status))}">${esc(statusLabel(order.status))}</span><strong class="money order-value">${order.value == null ? 'A consultar' : brl.format(order.value)}</strong></div></article>`).join(''); }
+function orderMobile(list) { return list.map(order => `<article class="mobile-card"><div class="mobile-card-top"><div><strong>${esc(order.customer)}</strong><small>${esc(order.id)} · ${esc(order.device)}</small></div><button class="more-button" data-action="view-order" data-id="${esc(order.id)}" aria-label="Ver ordem">•••</button></div><div class="mobile-card-bottom"><span class="status order-status ${statusMap[order.status]?.[1] || 'waiting'}" title="${esc(statusLabel(order.status))}">${esc(statusLabel(order.status))}</span><span class="quote-pill quote-${esc(order.quoteStatus || 'pending')}">${esc(QUOTE_STATUS_LABELS[order.quoteStatus] || QUOTE_STATUS_LABELS.pending)}</span><strong class="money order-value">${order.value == null ? 'A consultar' : brl.format(order.value)}</strong></div></article>`).join(''); }
 
 function deliveryStatusClass(status) {
   return { scheduled: 'analysis', in_transit: 'progress', completed: 'paid', cancelled: 'overdue' }[status] || 'waiting';
@@ -783,7 +815,7 @@ function bindTableFilter(type) {
     if (f) {
       if (type === 'products') list = list.filter(product => f === '__low__' ? product.stock <= product.minimum : product.category === f);
       if (type === 'services') list = list.filter(service => f === 'inactive' ? !service.active : service.pricing === f);
-      if (type === 'orders') list = list.filter(order => f === 'overdue' ? order.dueAt < isoToday() && !['delivered', 'cancelled'].includes(order.status) : order.status === f);
+      if (type === 'orders') list = list.filter(order => f.startsWith('quote-') ? order.quoteStatus === f.slice(6) : f === 'overdue' ? order.dueAt < isoToday() && !['delivered', 'cancelled'].includes(order.status) : order.status === f);
       if (type === 'payables') list = list.filter(payable => f === 'paid' ? payable.paid : f === 'overdue' ? !payable.paid && payable.dueAt < isoToday() : f === 'soon' ? !payable.paid && payable.dueAt >= isoToday() && payable.dueAt <= offsetDate(7) : !payable.paid);
       if (type === 'customers') list = list.filter(customer => f === 'inactive' ? customer.active === false : f === 'recurring' ? customerOrders(customer).length + customerSales(customer).length > 1 : customerOrders(customer).some(order => !['delivered', 'cancelled'].includes(order.status)));
       if (type === 'deliveries') list = list.filter(delivery => delivery.status === f || delivery.kind === f);
@@ -1014,7 +1046,7 @@ function registerDocumentIssue(type, sourceId, customer) {
   saveState();
 }
 
-function openPrintableDocument({ title, number, customer, issuedAt, body, total = '', notes = '' }) {
+function openPrintableDocument({ title, number, customer, issuedAt, body, total = '', notes = '', paper = 'a4' }) {
   const popup = window.open('', '_blank', 'width=920,height=760');
   if (!popup) {
     toast('O navegador bloqueou a janela de impressão. Permita pop-ups para este site.', 'error');
@@ -1023,7 +1055,10 @@ function openPrintableDocument({ title, number, customer, issuedAt, body, total 
   popup.opener = null;
   const company = state.settings;
   const companyLocation = [company.address, company.city, company.postalCode ? `CEP ${company.postalCode}` : ''].filter(Boolean).join(' · ');
-  popup.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(title)} ${esc(number)}</title><style>*{box-sizing:border-box}body{font:14px/1.5 Arial,sans-serif;color:#111;margin:0;background:#f3f6f8}.sheet{width:210mm;min-height:270mm;margin:16px auto;padding:18mm;background:#fff}.brand{display:flex;justify-content:space-between;gap:24px;padding-bottom:18px;border-bottom:3px solid #129cff}.brand h1{font-size:30px;margin:0}.brand p,.muted{color:#5b6570;margin:3px 0}.document-title{display:flex;justify-content:space-between;align-items:end;margin:28px 0 18px}.document-title h2{font-size:22px;margin:0}.number{font-weight:700;color:#0877c9}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}.box{border:1px solid #dbe2e8;border-radius:10px;padding:12px}.box small{display:block;color:#66727c;text-transform:uppercase;letter-spacing:.08em}.box strong{display:block;margin-top:4px}.content{margin:22px 0}.content table{width:100%;border-collapse:collapse}.content th,.content td{padding:10px 8px;border-bottom:1px solid #dde3e8;text-align:left}.content th:last-child,.content td:last-child{text-align:right}.total{margin:20px 0 0 auto;width:48%;padding:14px;border-radius:10px;background:#edf8ff;font-size:18px;display:flex;justify-content:space-between}.notes{margin-top:24px;padding:14px;border-left:4px solid #129cff;background:#f7fafc;white-space:pre-line}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:50px;margin-top:70px;text-align:center}.signature{border-top:1px solid #222;padding-top:8px}.footer{margin-top:45px;border-top:1px solid #dbe2e8;padding-top:12px;color:#66727c;font-size:12px}@media print{body{background:#fff}.sheet{margin:0;width:auto;min-height:auto;padding:10mm}@page{size:A4;margin:0}}</style></head><body><main class="sheet"><header class="brand"><div><h1>${esc(company.companyName || 'Cellf')}</h1><p>${esc(company.slogan || 'Reparo e Comércio')}</p></div><div><strong>${esc(company.legalName || '')}</strong><p>${esc(company.document ? `CNPJ ${company.document}` : '')}</p><p>${esc(company.phone || '')}</p></div></header><section class="document-title"><div><p class="muted">DOCUMENTO COMERCIAL</p><h2>${esc(title)}</h2></div><span class="number">Nº ${esc(number)}</span></section><section class="grid"><div class="box"><small>Cliente</small><strong>${esc(customer.name)}</strong></div><div class="box"><small>CPF / CNPJ</small><strong>${esc(customer.document)}</strong></div><div class="box"><small>Emissão</small><strong>${esc(formatDateTime(issuedAt || new Date().toISOString()))}</strong></div><div class="box"><small>Telefone</small><strong>${esc(customer.phone || 'Não informado')}</strong></div></section><section class="content">${body}</section>${total ? `<div class="total"><span>Total</span><strong>${esc(total)}</strong></div>` : ''}${notes ? `<div class="notes">${esc(notes)}</div>` : ''}<section class="signatures"><div class="signature">${esc(customer.name)}</div><div class="signature">${esc(company.companyName || 'Cellf')}</div></section><footer class="footer">${esc(companyLocation)}${company.email ? ` · ${esc(company.email)}` : ''}<br>Documento emitido pelo sistema Cellf.</footer></main><script>window.addEventListener('load',()=>{window.focus();window.print();});<\/script></body></html>`);
+  const thermal = paper === 'thermal80' || paper === 'thermal58';
+  const width = paper === 'thermal58' ? '58mm' : paper === 'thermal80' ? '80mm' : '210mm';
+  const pageSize = thermal ? width : 'A4';
+  popup.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(title)} ${esc(number)}</title><style>*{box-sizing:border-box}body{font:${thermal ? '11px/1.35' : '14px/1.5'} Arial,sans-serif;color:#111;margin:0;background:#f3f6f8}.sheet{width:${width};min-height:${thermal ? 'auto' : '270mm'};margin:16px auto;padding:${thermal ? '5mm 3mm' : '18mm'};background:#fff}.brand{display:flex;${thermal ? 'flex-direction:column;' : ''}justify-content:space-between;gap:${thermal ? '4px' : '24px'};padding-bottom:${thermal ? '8px' : '18px'};border-bottom:${thermal ? '1px' : '3px'} solid #129cff}.brand h1{font-size:${thermal ? '20px' : '30px'};margin:0}.brand p,.muted{color:#5b6570;margin:3px 0}.document-title{display:flex;${thermal ? 'flex-direction:column;align-items:flex-start;' : 'justify-content:space-between;align-items:end;'}gap:4px;margin:${thermal ? '12px 0 8px' : '28px 0 18px'}.document-title h2{font-size:${thermal ? '16px' : '22px'};margin:0}.number{font-weight:700;color:#0877c9}.grid{display:grid;grid-template-columns:${thermal ? '1fr' : '1fr 1fr'};gap:${thermal ? '5px' : '12px'};margin:${thermal ? '9px 0' : '16px 0'}.box{border:1px solid #dbe2e8;border-radius:${thermal ? '4px' : '10px'};padding:${thermal ? '6px' : '12px'}.box small{display:block;color:#66727c;text-transform:uppercase;letter-spacing:.08em}.box strong{display:block;margin-top:2px}.content{margin:${thermal ? '10px 0' : '22px 0'}.content table{width:100%;border-collapse:collapse}.content th,.content td{padding:${thermal ? '5px 2px' : '10px 8px'};border-bottom:1px solid #dde3e8;text-align:left}.content th:last-child,.content td:last-child{text-align:right}.total{margin:${thermal ? '10px 0 0' : '20px 0 0 auto'};width:${thermal ? '100%' : '48%'};padding:${thermal ? '8px' : '14px'};border-radius:${thermal ? '4px' : '10px'};background:#edf8ff;font-size:${thermal ? '14px' : '18px'};display:flex;justify-content:space-between}.notes{margin-top:${thermal ? '10px' : '24px'};padding:${thermal ? '7px' : '14px'};border-left:${thermal ? '2px' : '4px'} solid #129cff;background:#f7fafc;white-space:pre-line}.signatures{display:grid;grid-template-columns:${thermal ? '1fr' : '1fr 1fr'};gap:${thermal ? '34px' : '50px'};margin-top:${thermal ? '35px' : '70px'};text-align:center}.signature{border-top:1px solid #222;padding-top:6px}.footer{margin-top:${thermal ? '22px' : '45px'};border-top:1px solid #dbe2e8;padding-top:8px;color:#66727c;font-size:${thermal ? '9px' : '12px'}}@media print{body{background:#fff}.sheet{margin:0;width:auto;min-height:auto;padding:${thermal ? '2mm' : '10mm'}}@page{size:${pageSize};margin:0}}</style></head><body><main class="sheet"><header class="brand"><div><h1>${esc(company.companyName || 'Cellf')}</h1><p>${esc(company.slogan || 'Reparo e Comércio')}</p></div><div><strong>${esc(company.legalName || '')}</strong><p>${esc(company.document ? `CNPJ ${company.document}` : '')}</p><p>${esc(company.phone || '')}</p></div></header><section class="document-title"><div><p class="muted">DOCUMENTO COMERCIAL</p><h2>${esc(title)}</h2></div><span class="number">Nº ${esc(number)}</span></section><section class="grid"><div class="box"><small>Cliente</small><strong>${esc(customer.name)}</strong></div><div class="box"><small>CPF / CNPJ</small><strong>${esc(customer.document || 'Não informado')}</strong></div><div class="box"><small>Emissão</small><strong>${esc(formatDateTime(issuedAt || new Date().toISOString()))}</strong></div><div class="box"><small>Telefone</small><strong>${esc(customer.phone || 'Não informado')}</strong></div></section><section class="content">${body}</section>${total ? `<div class="total"><span>Total</span><strong>${esc(total)}</strong></div>` : ''}${notes ? `<div class="notes">${esc(notes)}</div>` : ''}<section class="signatures"><div class="signature">${esc(customer.name)}</div><div class="signature">${esc(company.companyName || 'Cellf')}</div></section><footer class="footer">${esc(companyLocation)}${company.email ? ` · ${esc(company.email)}` : ''}<br>Documento emitido pelo sistema Cellf.</footer></main><script>window.addEventListener('load',()=>{window.focus();window.print();});<\/script></body></html>`);
   popup.document.close();
   return true;
 }
@@ -1046,19 +1081,26 @@ function printSaleDocument(sale, type) {
   }
 }
 
-function printOrderDocument(order, type) {
+function printOrderDocument(order, type, paper = 'a4') {
   if (!order) return;
-  const customer = requireDocumentCustomer(order);
+  const commercialType = ['orcamento', 'ordem', 'etiqueta'].includes(type);
+  const customer = commercialType ? transactionCustomer(order) : requireDocumentCustomer(order);
   if (!customer) return;
   const service = serviceName(order.serviceId);
   const days = Number(order.warrantyDays ?? state.settings.warrantyDays ?? 0);
   const warrantyStart = order.deliveredAt || new Date().toISOString();
-  const facts = `<div class="grid"><div class="box"><small>Aparelho</small><strong>${esc(order.device)}</strong></div><div class="box"><small>IMEI</small><strong>${esc(order.imei || 'Não informado')}</strong></div><div class="box"><small>Serviço</small><strong>${esc(service)}</strong></div><div class="box"><small>Ordem de serviço</small><strong>${esc(order.id)}</strong></div></div><p><strong>Defeito relatado:</strong> ${esc(order.issue)}</p>`;
-  const payload = type === 'garantia'
+  const checked = DEVICE_CHECKLIST.filter(([key]) => order.checklist?.[key]).map(([, label]) => label);
+  const facts = `<div class="grid"><div class="box"><small>Aparelho</small><strong>${esc(order.device)}</strong></div><div class="box"><small>IMEI</small><strong>${esc(order.imei || 'Não informado')}</strong></div><div class="box"><small>Serviço</small><strong>${esc(service)}</strong></div><div class="box"><small>Ordem de serviço</small><strong>${esc(order.id)}</strong></div></div><p><strong>Defeito relatado:</strong> ${esc(order.issue)}</p>${order.technicalDescription ? `<p><strong>Descrição técnica:</strong> ${esc(order.technicalDescription)}</p>` : ''}${order.deviceCondition ? `<p><strong>Estado na entrada:</strong> ${esc(order.deviceCondition)}</p>` : ''}${order.accessories ? `<p><strong>Acessórios recebidos:</strong> ${esc(order.accessories)}</p>` : ''}${checked.length ? `<p><strong>Itens testados e funcionando:</strong> ${esc(checked.join(', '))}</p>` : ''}`;
+  let payload;
+  if (type === 'orcamento') payload = { title: 'Orçamento de serviço', number: `ORC-${order.id}`, customer, issuedAt: new Date().toISOString(), body: `${facts}<div class="grid"><div class="box"><small>Aprovação</small><strong>${esc(QUOTE_STATUS_LABELS[order.quoteStatus] || QUOTE_STATUS_LABELS.pending)}</strong></div><div class="box"><small>Previsão</small><strong>${esc(formatDate(order.dueAt))}</strong></div></div>`, total: order.value == null ? 'A consultar' : brl.format(order.value), notes: `Orçamento sujeito à aprovação do cliente. Garantia prevista: ${days} dias.` };
+  else if (type === 'ordem') payload = { title: 'Ordem de serviço', number: order.id, customer, issuedAt: order.createdAt, body: `${facts}<div class="grid"><div class="box"><small>Status da ordem</small><strong>${esc(statusLabel(order.status))}</strong></div><div class="box"><small>Status do orçamento</small><strong>${esc(QUOTE_STATUS_LABELS[order.quoteStatus] || QUOTE_STATUS_LABELS.pending)}</strong></div></div>`, total: order.value == null ? '' : brl.format(order.value), notes: order.warrantyNotes || state.settings.orderNotes || '' };
+  else if (type === 'etiqueta') payload = { title: 'Etiqueta de bancada', number: order.id, customer, issuedAt: order.createdAt, body: `<p><strong>${esc(order.device)}</strong></p><p>${esc(order.issue)}</p><p><strong>Status:</strong> ${esc(statusLabel(order.status))}</p>`, notes: order.imei ? `IMEI: ${order.imei}` : '' , paper: 'thermal58' };
+  else payload = type === 'garantia'
     ? { title: 'Termo de garantia de serviço', number: `GAR-${order.id}`, customer, issuedAt: new Date().toISOString(), body: `${facts}<div class="grid"><div class="box"><small>Início da garantia</small><strong>${esc(formatDate(warrantyStart))}</strong></div><div class="box"><small>Validade</small><strong>${esc(formatDate(datePlusDays(warrantyStart, days)))}</strong></div></div>`, notes: order.warrantyNotes || state.settings.orderNotes || `Garantia de ${days} dias.` }
     : { title: 'Recibo de serviço', number: `REC-${order.id}`, customer, issuedAt: new Date().toISOString(), body: `<p>Recebemos de <strong>${esc(customer.name)}</strong>, CPF/CNPJ ${esc(customer.document)}, o valor referente ao serviço abaixo.</p>${facts}`, total: brl.format(Number(order.value || 0)), notes: 'Este recibo comprova o recebimento do valor indicado.' };
-  if (openPrintableDocument(payload)) {
-    registerDocumentIssue(type === 'garantia' ? 'Garantia de serviço' : 'Recibo de serviço', order.id, customer);
+  if (openPrintableDocument({ ...payload, paper: payload.paper || paper })) {
+    const labels = { garantia: 'Garantia de serviço', recibo: 'Recibo de serviço', orcamento: 'Orçamento de serviço', ordem: 'Ordem de serviço', etiqueta: 'Etiqueta de bancada' };
+    registerDocumentIssue(labels[type] || 'Documento de serviço', order.id, customer);
     toast('Documento preparado para impressão.');
   }
 }
@@ -1239,10 +1281,17 @@ function renderReports() {
   const expenseCategories = [...new Set(data.paidPayables.map(payable => payable.category))].map(category => ({ label: category, amount: sum(data.paidPayables.filter(payable => payable.category === category)), count: data.paidPayables.filter(payable => payable.category === category).length })).sort((a, b) => b.amount - a.amount);
   const percent = value => value == null ? '—' : `${(value * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
   const daily = value => Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+  const quotedOrders = data.orders.filter(order => order.value != null && order.quoteStatus);
+  const approvedQuotes = quotedOrders.filter(order => order.quoteStatus === 'approved');
+  const rejectedQuotes = quotedOrders.filter(order => order.quoteStatus === 'rejected');
+  const pendingQuotes = quotedOrders.filter(order => order.quoteStatus === 'pending');
+  const quoteConversion = quotedOrders.length ? approvedQuotes.length / quotedOrders.length : 0;
+  const pendingOpportunity = sum(pendingQuotes, 'value');
 
   content.innerHTML = `${pageHeading('INTELIGÊNCIA DO NEGÓCIO', 'Relatórios e resultados', 'Entenda o desempenho da loja com dados reais da operação.', '<button class="ghost-button" data-action="export-report">↓ Exportar relatório</button>')}
     <div class="report-toolbar"><div class="segmented-control" role="group" aria-label="Período do relatório"><button class="segment ${reportPeriod === 7 ? 'active' : ''}" data-action="report-period" data-days="7">7 dias</button><button class="segment ${reportPeriod === 30 ? 'active' : ''}" data-action="report-period" data-days="30">30 dias</button><button class="segment ${reportPeriod === 90 ? 'active' : ''}" data-action="report-period" data-days="90">90 dias</button><button class="segment ${reportPeriod === 0 ? 'active' : ''}" data-action="report-period" data-days="0">Tudo</button></div><span class="result-count">${esc(periodLabel)} · atualizado agora</span></div>
     <section class="report-priority" aria-labelledby="report-priority-title"><header class="report-priority-heading"><div><p class="eyebrow">INDICADORES EM DESTAQUE</p><h2 id="report-priority-title">Rentabilidade e produtividade</h2></div><span>${data.daySpan} ${data.daySpan === 1 ? 'dia analisado' : 'dias analisados'}</span></header><div class="report-priority-grid"><article class="report-priority-card is-primary"><div><span>Lucro total</span><span class="report-priority-icon">↗</span></div><strong>${brl.format(data.totalProfit)}</strong><small>Receita menos custos diretos de produtos e serviços</small></article><article class="report-priority-card"><div><span>Lucro médio /serviço</span><span class="report-priority-icon">⌁</span></div><strong>${percent(data.averageServiceMargin)}</strong><small>${data.averageServiceMargin == null ? 'Cadastre o custo estimado dos serviços' : `${data.serviceCount} serviços concluídos`}</small></article><article class="report-priority-card"><div><span>Lucro médio /produto</span><span class="report-priority-icon">◇</span></div><strong>${percent(data.averageProductMargin)}</strong><small>${data.productCount} unidades vendidas</small></article><article class="report-priority-card"><div><span>Serviços /dia</span><span class="report-priority-icon">◷</span></div><strong>${daily(data.servicesPerDay)}</strong><small>Média diária de serviços entregues</small></article><article class="report-priority-card"><div><span>Produtos /dia</span><span class="report-priority-icon">＋</span></div><strong>${daily(data.productsPerDay)}</strong><small>Média diária de unidades vendidas</small></article></div></section>
+    <section class="quote-insights" aria-label="Desempenho dos orçamentos">${statCard('CONVERSÃO DE ORÇAMENTOS', percent(quoteConversion), '↗', `${approvedQuotes.length} de ${quotedOrders.length} aprovados`, true)}${statCard('OPORTUNIDADE PENDENTE', brl.format(pendingOpportunity), '◷', `${pendingQuotes.length} aguardando resposta`)}${statCard('ORÇAMENTOS RECUSADOS', rejectedQuotes.length, '×', `${brl.format(sum(rejectedQuotes, 'value'))} não convertidos`)}${statCard('TÍQUETE MÉDIO APROVADO', approvedQuotes.length ? brl.format(sum(approvedQuotes, 'value') / approvedQuotes.length) : '—', '◇', 'Valor médio dos orçamentos aprovados')}</section>
     <div class="stats-grid report-support-grid">${statCard('FATURAMENTO TOTAL', brl.format(data.revenue), '↗', `${data.sales.length} vendas · ${data.delivered.length} ordens entregues`)}${statCard('RESULTADO LÍQUIDO', brl.format(data.grossProfit), '◈', `${margin}% de margem após custos e despesas`)}${statCard('A RECEBER', brl.format(sum(openReceivables, 'value')), '⌁', `${openReceivables.length} ordens com valor definido`)}${statCard('DESPESAS PAGAS', brl.format(data.expenses), '↘', `${data.paidPayables.length} pagamentos no período`)}</div>
     <div class="reports-grid"><section class="card report-chart"><header class="card-header"><div><p class="eyebrow">EVOLUÇÃO</p><h2>Faturamento diário</h2></div><strong class="money">${brl.format(buckets.reduce((total, bucket) => total + bucket.total, 0))}</strong></header><div class="chart-bars">${buckets.map(bucket => `<div class="chart-bar" title="${formatDate(bucket.date)}: ${brl.format(bucket.total)}"><span class="chart-bar-value">${bucket.total ? brl.format(bucket.total) : ''}</span><div class="chart-bar-track"><i class="chart-bar-fill" style="height:${bucket.total ? Math.max(Math.round(bucket.total / maxBucket * 100), 5) : 2}%"></i></div><small>${String(bucket.date).slice(8)}</small></div>`).join('')}</div><div class="chart-caption">Vendas de produtos e ordens entregues nos últimos ${chartDays} dias.</div></section>
     <section class="card report-summary"><header class="card-header"><div><p class="eyebrow">RESULTADO</p><h2>Composição financeira</h2></div></header><div class="report-breakdown"><div class="breakdown-row"><span>Vendas de produtos</span><strong>${brl.format(data.salesRevenue)}</strong></div><div class="breakdown-row"><span>Serviços entregues</span><strong>${brl.format(data.serviceRevenue)}</strong></div><div class="breakdown-row is-negative"><span>Custo dos produtos vendidos</span><strong>− ${brl.format(data.costOfSales)}</strong></div><div class="breakdown-row is-negative"><span>Custo dos serviços</span><strong>− ${brl.format(data.serviceCosts)}</strong></div><div class="breakdown-row"><span>Lucro total</span><strong>${brl.format(data.totalProfit)}</strong></div><div class="breakdown-row is-negative"><span>Despesas pagas</span><strong>− ${brl.format(data.expenses)}</strong></div><div class="breakdown-row is-total"><span>Resultado líquido</span><strong>${brl.format(data.grossProfit)}</strong></div></div></section>
@@ -1320,7 +1369,7 @@ function renderSettings() {
             <div class="company-privacy-note"><span aria-hidden="true">ⓘ</span><p>Os documentos são enviados diretamente para o armazenamento privado do Supabase. Os downloads utilizam links temporários e protegidos, sem manter arquivos no dispositivo.</p></div>
           </div>
         </section>
-        <section id="operacao" class="card settings-section" ${settingsPanelAttributes('operacao')}><header class="card-header"><div><p class="eyebrow">ASSISTÊNCIA TÉCNICA</p><h2>Operação e prazos</h2></div></header><div class="settings-grid form-grid"><div class="field"><label>ABERTURA</label><input name="openingTime" type="time" value="${esc(settings.openingTime)}"></div><div class="field"><label>FECHAMENTO</label><input name="closingTime" type="time" value="${esc(settings.closingTime)}"></div><div class="field"><label>GARANTIA PADRÃO (DIAS)</label><input name="warrantyDays" type="number" min="0" max="3650" value="${Number(settings.warrantyDays || 0)}"></div><div class="field"><label>PRAZO PADRÃO DE ENTREGA (DIAS)</label><input name="defaultDeadlineDays" type="number" min="0" max="365" value="${Number(settings.defaultDeadlineDays || 0)}"></div><div class="field full"><label>OBSERVAÇÕES PADRÃO DA ORDEM</label><textarea name="orderNotes">${esc(settings.orderNotes)}</textarea></div></div></section>
+        <section id="operacao" class="card settings-section" ${settingsPanelAttributes('operacao')}><header class="card-header"><div><p class="eyebrow">ASSISTÊNCIA TÉCNICA</p><h2>Operação e prazos</h2></div></header><div class="settings-grid form-grid"><div class="field"><label>ABERTURA</label><input name="openingTime" type="time" value="${esc(settings.openingTime)}"></div><div class="field"><label>FECHAMENTO</label><input name="closingTime" type="time" value="${esc(settings.closingTime)}"></div><div class="field"><label>GARANTIA PADRÃO (DIAS)</label><input name="warrantyDays" type="number" min="0" max="3650" value="${Number(settings.warrantyDays || 0)}"></div><div class="field"><label>PRAZO PADRÃO DE ENTREGA (DIAS)</label><input name="defaultDeadlineDays" type="number" min="0" max="365" value="${Number(settings.defaultDeadlineDays || 0)}"></div><div class="field"><label>META DIÁRIA DE FATURAMENTO (R$)</label><input name="dailyRevenueGoal" type="number" min="0" step="0.01" value="${Number(settings.dailyRevenueGoal || 0)}"></div><div class="field"><label>LINK DE AVALIAÇÃO DO GOOGLE</label><input name="googleReviewUrl" type="url" value="${esc(settings.googleReviewUrl || '')}" placeholder="https://g.page/r/.../review"><small class="field-help">Usado na mensagem de pós-venda enviada pelo WhatsApp.</small></div><div class="field full"><label>OBSERVAÇÕES PADRÃO DA ORDEM</label><textarea name="orderNotes">${esc(settings.orderNotes)}</textarea></div></div></section>
         <section id="avisos" class="card settings-section" ${settingsPanelAttributes('avisos')}><header class="card-header"><div><p class="eyebrow">ATENÇÃO</p><h2>Avisos e lembretes</h2></div></header><div class="settings-grid settings-toggles"><label class="settings-toggle"><span><strong>Estoque baixo</strong><small>Destacar produtos abaixo da quantidade mínima.</small></span><input name="lowStockAlert" type="checkbox" ${settings.lowStockAlert ? 'checked' : ''}></label><label class="settings-toggle"><span><strong>Prazos de entrega</strong><small>Avisar sobre ordens vencidas e próximas do prazo.</small></span><input name="dueDateAlert" type="checkbox" ${settings.dueDateAlert ? 'checked' : ''}></label><label class="settings-toggle"><span><strong>Compromissos da agenda</strong><small>Exibir compromissos e lembretes na central.</small></span><input name="appointmentAlert" type="checkbox" ${settings.appointmentAlert ? 'checked' : ''}></label></div></section>
         <section id="dados" class="card settings-section" ${settingsPanelAttributes('dados')}><header class="card-header"><div><p class="eyebrow">SEGURANÇA</p><h2>Dados e privacidade</h2></div></header><div class="settings-grid"><div class="settings-notice"><span aria-hidden="true">☁</span><div><strong>Dados protegidos no Supabase</strong><p>Todos os cadastros ficam salvos no banco de dados na nuvem. Os documentos permanecem em um espaço privado com acesso autenticado e links temporários.</p></div></div><div class="cloud-session-actions"><button type="button" class="ghost-button" data-action="export-backup">↓ Exportar dados da nuvem</button><button type="button" class="ghost-button cloud-session-button" data-action="logout">↪ Encerrar sessão segura</button></div></div></section>
         <div class="settings-actions company-savebar"><button class="primary-button" type="submit">✓ Salvar configurações</button></div>
@@ -1386,6 +1435,8 @@ function renderSettings() {
       closingTime: String(form.get('closingTime') || '18:00'),
       warrantyDays: Number(form.get('warrantyDays') || 0),
       defaultDeadlineDays: Number(form.get('defaultDeadlineDays') || 0),
+      dailyRevenueGoal: Number(form.get('dailyRevenueGoal') || 0),
+      googleReviewUrl: String(form.get('googleReviewUrl') || '').trim(),
       orderNotes: String(form.get('orderNotes') || '').trim(),
       lowStockAlert: form.has('lowStockAlert'),
       dueDateAlert: form.has('dueDateAlert'),
@@ -1658,6 +1709,8 @@ function serviceModal(service = {}) {
     <div class="field" id="price-field"><label>PREÇO FIXO (R$)</label><input name="price" type="number" min="0" step="0.01" value="${service.price??''}"></div>
     <div class="field"><label>CUSTO ESTIMADO (R$)</label><input name="cost" type="number" min="0" step="0.01" value="${service.cost??''}" placeholder="Peças e insumos"><small class="field-help">Usado no cálculo de lucro e margem do serviço.</small></div>
     <div class="field"><label>DURAÇÃO ESTIMADA (MIN) *</label><input name="duration" type="number" min="1" required value="${service.duration??''}" placeholder="Informe a duração"></div>
+    <div class="field"><label>GARANTIA PADRÃO (DIAS)</label><input name="warrantyDays" type="number" min="0" max="3650" value="${Number(service.warrantyDays ?? state.settings.warrantyDays ?? 0)}"></div>
+    <div class="field full"><label>DESCRIÇÃO TÉCNICA PADRÃO</label><textarea name="description" placeholder="Ex.: Substituição da tela, testes funcionais e limpeza técnica.">${esc(service.description || '')}</textarea><small class="field-help">Preenche automaticamente a ordem e o orçamento ao selecionar este serviço.</small></div>
     <div class="field full"><label><input name="active" type="checkbox" style="width:auto;height:auto" ${service.active!==false?'checked':''}> Serviço ativo para novas ordens</label></div>
     ${formActions(service.id?'Salvar alterações':'Cadastrar serviço')}</form>`);
   const toggle=()=>{
@@ -1667,7 +1720,7 @@ function serviceModal(service = {}) {
   }; toggle(); document.querySelector('#pricing-select').addEventListener('change',toggle);
   document.querySelector('#service-form').addEventListener('submit',e=>{
     e.preventDefault(); const fd=new FormData(e.target), data=Object.fromEntries(fd); const pricing=data.pricing;
-    const record={id:service.id||uid('s'),name:data.name.trim(),category:data.category.trim(),pricing,price:pricing==='fixed'?Number(data.price||0):null,cost:data.cost===''?null:Number(data.cost),duration:Number(data.duration),active:fd.has('active')};
+    const record={id:service.id||uid('s'),name:data.name.trim(),category:data.category.trim(),pricing,price:pricing==='fixed'?Number(data.price||0):null,cost:data.cost===''?null:Number(data.cost),duration:Number(data.duration),warrantyDays:Number(data.warrantyDays||0),description:String(data.description||'').trim(),active:fd.has('active')};
     if(service.id) state.services=state.services.map(x=>x.id===service.id?record:x); else state.services.unshift(record);
     recordActivity('service', `${service.id ? 'Atualizado' : 'Cadastrado'}: ${record.name}`);
     saveState();closeModal();navigate('services');toast(service.id?'Serviço atualizado.':'Serviço cadastrado.','success');
@@ -1680,7 +1733,9 @@ function orderModal(order = {}) {
   const selectedAddress = order.deliveryAddress || {};
   const pickupReturn = order.attendanceType === 'pickup_return';
   const anonymousOrder = normalize(order.customer) === normalize(ANONYMOUS_CUSTOMER);
-  openModal(order.id ? `Editar ${order.id}` : 'Nova ordem de serviço', 'ASSISTÊNCIA TÉCNICA', `<form id="order-form" class="form-grid"><div class="field full"><label>CLIENTE CADASTRADO</label><select name="customerId" id="order-customer"><option value="">Cadastrar a partir dos dados abaixo</option>${customers.map(customer => `<option value="${esc(customer.id)}" data-name="${esc(customer.name)}" data-phone="${esc(customer.phone)}" ${order.customerId === customer.id ? 'selected' : ''}>${esc(customer.name)} · ${esc(customer.phone || 'sem telefone')}</option>`).join('')}</select></div><div class="field"><label>NOME DO CLIENTE *</label><input name="customer" id="order-customer-name" required value="${esc(order.customer)}" placeholder="Nome completo"></div><div class="field"><label>TELEFONE${anonymousOrder ? '' : ' *'}</label><input name="phone" id="order-customer-phone" ${anonymousOrder ? '' : 'required'} value="${esc(order.phone)}" placeholder="(11) 99999-9999"></div><div class="field full"><label>TIPO DE ATENDIMENTO *</label><select name="attendanceType" id="order-attendance-type"><option value="in_store_service" ${!pickupReturn ? 'selected' : ''}>${ATTENDANCE_LABELS.in_store_service}</option><option value="pickup_return" ${pickupReturn ? 'selected' : ''}>${ATTENDANCE_LABELS.pickup_return}</option></select></div><section class="field full fulfillment-address-fields" id="order-address-section" ${pickupReturn ? '' : 'hidden'}><div class="form-section address-form-heading"><h3>Endereço desta ordem de serviço</h3><p>A busca e a devolução usarão o endereço informado apenas nesta ordem.</p></div><div class="form-grid">${addressFieldsMarkup(selectedAddress)}</div></section><div class="field"><label>APARELHO *</label><input name="device" required value="${esc(order.device)}" placeholder="Ex.: iPhone 13 Pro"></div><div class="field"><label>IMEI</label><input name="imei" inputmode="numeric" maxlength="15" value="${esc(order.imei)}" placeholder="15 dígitos"></div><div class="field full"><label>DEFEITO RELATADO *</label><textarea name="issue" required placeholder="Descreva o problema informado pelo cliente...">${esc(order.issue)}</textarea></div><div class="form-section"><h3>Serviço e prazo</h3></div><div class="field full"><label>SERVIÇO *</label><select name="serviceId" id="order-service" required><option value="">Selecione...</option>${state.services.filter(service => service.active || service.id === order.serviceId).map(service => `<option value="${esc(service.id)}" data-price="${service.price ?? ''}" ${order.serviceId === service.id ? 'selected' : ''}>${esc(service.name)} — ${service.pricing === 'fixed' ? brl.format(service.price) : 'A consultar'}</option>`).join('')}</select></div><div class="field"><label>VALOR ACORDADO (R$)</label><input name="value" id="order-value" type="number" min="0" step="0.01" value="${order.value ?? ''}" placeholder="Deixe vazio se a consultar"></div><div class="field"><label>FORMA DE PAGAMENTO</label><select name="payment"><option value="">A definir</option>${Object.entries(PAYMENT_LABELS).map(([value, label]) => `<option value="${value}" ${order.payment === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div><div class="field"><label>PREVISÃO DE ENTREGA *</label><input name="dueAt" type="date" required value="${esc(order.dueAt || defaultDue)}"></div>${order.id ? `<div class="field full"><label>STATUS</label><select name="status">${Object.entries(statusMap).map(([value, [label]]) => `<option value="${value}" ${order.status === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div>` : ''}<div class="form-section"><h3>Lembrete opcional</h3></div><div class="field full"><label>LEMBRETE</label><input name="reminder" value="${esc(order.reminder)}" placeholder="Ex.: Avisar o cliente quando a peça chegar"></div><div class="field full"><label>DATA E HORA DO LEMBRETE</label><input name="reminderAt" type="datetime-local" value="${esc(order.reminderAt)}"></div>${formActions(order.id ? 'Salvar alterações' : 'Criar ordem')}</form>`);
+  const checklist = order.checklist && typeof order.checklist === 'object' ? order.checklist : {};
+  const checklistMarkup = DEVICE_CHECKLIST.map(([key, label]) => `<label class="checklist-item"><input type="checkbox" name="checklist-${key}" ${checklist[key] ? 'checked' : ''}><span>${esc(label)}</span></label>`).join('');
+  openModal(order.id ? `Editar ${order.id}` : 'Nova ordem de serviço', 'ASSISTÊNCIA TÉCNICA', `<form id="order-form" class="form-grid"><div class="field full"><label>CLIENTE CADASTRADO</label><select name="customerId" id="order-customer"><option value="">Cadastrar a partir dos dados abaixo</option>${customers.map(customer => `<option value="${esc(customer.id)}" data-name="${esc(customer.name)}" data-phone="${esc(customer.phone)}" ${order.customerId === customer.id ? 'selected' : ''}>${esc(customer.name)} · ${esc(customer.phone || 'sem telefone')}</option>`).join('')}</select></div><div class="field"><label>NOME DO CLIENTE *</label><input name="customer" id="order-customer-name" required value="${esc(order.customer)}" placeholder="Nome completo"></div><div class="field"><label>TELEFONE${anonymousOrder ? '' : ' *'}</label><input name="phone" id="order-customer-phone" ${anonymousOrder ? '' : 'required'} value="${esc(order.phone)}" placeholder="(11) 99999-9999"></div><div class="field full"><label>TIPO DE ATENDIMENTO *</label><select name="attendanceType" id="order-attendance-type"><option value="in_store_service" ${!pickupReturn ? 'selected' : ''}>${ATTENDANCE_LABELS.in_store_service}</option><option value="pickup_return" ${pickupReturn ? 'selected' : ''}>${ATTENDANCE_LABELS.pickup_return}</option></select></div><section class="field full fulfillment-address-fields" id="order-address-section" ${pickupReturn ? '' : 'hidden'}><div class="form-section address-form-heading"><h3>Endereço desta ordem de serviço</h3><p>A busca e a devolução usarão o endereço informado apenas nesta ordem.</p></div><div class="form-grid">${addressFieldsMarkup(selectedAddress)}</div></section><div class="field"><label>APARELHO *</label><input name="device" required value="${esc(order.device)}" placeholder="Ex.: iPhone 13 Pro"></div><div class="field"><label>IMEI</label><input name="imei" inputmode="numeric" maxlength="15" value="${esc(order.imei)}" placeholder="15 dígitos"></div><div class="field full"><label>DEFEITO RELATADO *</label><textarea name="issue" required placeholder="Descreva o problema informado pelo cliente...">${esc(order.issue)}</textarea></div><div class="field"><label>ESTADO DO APARELHO NA ENTRADA</label><textarea name="deviceCondition" placeholder="Ex.: riscos na lateral, tela trincada...">${esc(order.deviceCondition || '')}</textarea></div><div class="field"><label>ACESSÓRIOS RECEBIDOS</label><textarea name="accessories" placeholder="Ex.: capa, chip e carregador">${esc(order.accessories || '')}</textarea></div><section class="field full device-checklist"><div class="form-section"><h3>Checklist de entrada</h3><p>Marque somente o que foi testado e está funcionando.</p></div><div class="checklist-grid">${checklistMarkup}</div></section><div class="form-section"><h3>Serviço, orçamento e prazo</h3></div><div class="field full"><label>SERVIÇO *</label><select name="serviceId" id="order-service" required><option value="">Selecione...</option>${state.services.filter(service => service.active || service.id === order.serviceId).map(service => `<option value="${esc(service.id)}" data-price="${service.price ?? ''}" data-description="${esc(service.description || '')}" data-warranty="${Number(service.warrantyDays ?? state.settings.warrantyDays ?? 0)}" ${order.serviceId === service.id ? 'selected' : ''}>${esc(service.name)} — ${service.pricing === 'fixed' ? brl.format(service.price) : 'A consultar'}</option>`).join('')}</select></div><div class="field full"><label>DESCRIÇÃO TÉCNICA</label><textarea name="technicalDescription" id="order-technical-description" placeholder="Diagnóstico, peças e serviço a executar...">${esc(order.technicalDescription || '')}</textarea></div><div class="field"><label>VALOR DO ORÇAMENTO (R$)</label><input name="value" id="order-value" type="number" min="0" step="0.01" value="${order.value ?? ''}" placeholder="Deixe vazio se a consultar"></div><div class="field"><label>APROVAÇÃO DO ORÇAMENTO</label><select name="quoteStatus">${Object.entries(QUOTE_STATUS_LABELS).map(([value, label]) => `<option value="${value}" ${(order.quoteStatus || 'pending') === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div><div class="field"><label>FORMA DE PAGAMENTO</label><select name="payment"><option value="">A definir</option>${Object.entries(PAYMENT_LABELS).map(([value, label]) => `<option value="${value}" ${order.payment === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div><div class="field"><label>GARANTIA (DIAS)</label><input name="warrantyDays" id="order-warranty-days" type="number" min="0" max="3650" value="${Number(order.warrantyDays ?? state.settings.warrantyDays ?? 0)}"></div><div class="field"><label>PREVISÃO DE ENTREGA *</label><input name="dueAt" type="date" required value="${esc(order.dueAt || defaultDue)}"></div>${order.id ? `<div class="field"><label>STATUS DA ORDEM</label><select name="status">${Object.entries(statusMap).map(([value, [label]]) => `<option value="${value}" ${order.status === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div>` : ''}<div class="form-section"><h3>Lembrete opcional</h3></div><div class="field full"><label>LEMBRETE</label><input name="reminder" value="${esc(order.reminder)}" placeholder="Ex.: Avisar o cliente quando a peça chegar"></div><div class="field full"><label>DATA E HORA DO LEMBRETE</label><input name="reminderAt" type="datetime-local" value="${esc(order.reminderAt)}"></div>${formActions(order.id ? 'Salvar alterações' : 'Criar ordem')}</form>`);
   const form = document.querySelector('#order-form');
   const attendanceSelect = document.querySelector('#order-attendance-type');
   const toggleAddress = () => {
@@ -1701,8 +1756,13 @@ function orderModal(order = {}) {
     }
   });
   document.querySelector('#order-service').addEventListener('change', event => {
-    const price = event.target.selectedOptions[0]?.dataset.price;
+    const selected = event.target.selectedOptions[0];
+    const price = selected?.dataset.price;
     if (price && !document.querySelector('#order-value').value) document.querySelector('#order-value').value = price;
+    const description = document.querySelector('#order-technical-description');
+    if (description && !description.value.trim() && selected?.dataset.description) description.value = selected.dataset.description;
+    const warranty = document.querySelector('#order-warranty-days');
+    if (warranty && selected?.dataset.warranty) warranty.value = selected.dataset.warranty;
   });
   document.querySelector('#order-form').addEventListener('submit', event => {
     event.preventDefault();
@@ -1725,7 +1785,9 @@ function orderModal(order = {}) {
     const status = order.id ? data.status : 'analysis';
     const selectedService = state.services.find(service => service.id === data.serviceId);
     const serviceCost = order.id && order.serviceId === data.serviceId && order.serviceCost != null ? Number(order.serviceCost) : selectedService?.cost == null ? null : Number(selectedService.cost);
-    const record = { id: order.id || `OS-${next}`, customerId: customer?.id || '', customer: data.customer.trim(), customerDocument: formatCpfCnpj(order.customerDocument || customer?.document || ''), phone: data.phone.trim(), attendanceType: needsAddress ? 'pickup_return' : 'in_store_service', deliveryAddress: address ? { ...address } : null, device: data.device.trim(), imei, issue: data.issue.trim(), serviceId: data.serviceId, serviceCost, value: data.value === '' ? null : Number(data.value), payment: data.payment || '', paymentDetails: data.payment ? PAYMENT_LABELS[data.payment] : '', status, createdAt: order.createdAt || isoToday(), dueAt: data.dueAt, reminderAt: data.reminderAt, reminder: data.reminder.trim(), deliveredAt: status === 'delivered' ? order.deliveredAt || new Date().toISOString() : '', warrantyDays: Number(order.warrantyDays ?? state.settings.warrantyDays ?? 0), warrantyNotes: order.warrantyNotes || state.settings.orderNotes || '' };
+    const checklistValues = Object.fromEntries(DEVICE_CHECKLIST.map(([key]) => [key, new FormData(event.target).has(`checklist-${key}`)]));
+    const quoteStatus = Object.hasOwn(QUOTE_STATUS_LABELS, data.quoteStatus) ? data.quoteStatus : 'pending';
+    const record = { id: order.id || `OS-${next}`, customerId: customer?.id || '', customer: data.customer.trim(), customerDocument: formatCpfCnpj(order.customerDocument || customer?.document || ''), phone: data.phone.trim(), attendanceType: needsAddress ? 'pickup_return' : 'in_store_service', deliveryAddress: address ? { ...address } : null, device: data.device.trim(), imei, issue: data.issue.trim(), deviceCondition: String(data.deviceCondition || '').trim(), accessories: String(data.accessories || '').trim(), checklist: checklistValues, photos: Array.isArray(order.photos) ? order.photos : [], serviceId: data.serviceId, serviceCost, technicalDescription: String(data.technicalDescription || '').trim(), value: data.value === '' ? null : Number(data.value), quoteStatus, quoteDecidedAt: quoteStatus === 'pending' ? '' : order.quoteStatus === quoteStatus && order.quoteDecidedAt ? order.quoteDecidedAt : new Date().toISOString(), payment: data.payment || '', paymentDetails: data.payment ? PAYMENT_LABELS[data.payment] : '', status, createdAt: order.createdAt || isoToday(), dueAt: data.dueAt, reminderAt: data.reminderAt, reminder: data.reminder.trim(), deliveredAt: status === 'delivered' ? order.deliveredAt || new Date().toISOString() : '', warrantyDays: Number(data.warrantyDays || 0), warrantyNotes: order.warrantyNotes || state.settings.orderNotes || '' };
     if (order.id) state.orders = state.orders.map(item => item.id === order.id ? record : item);
     else state.orders.unshift(record);
     syncRepairDeliveries(record, customer || { id: '', name: record.customer, phone: record.phone }, address);
@@ -1767,13 +1829,89 @@ function stockModal() {
   });
 }
 
+function orderWhatsappMessage(order, kind) {
+  const name = order.customer || 'cliente';
+  const value = order.value == null ? 'a confirmar' : brl.format(order.value);
+  const messages = {
+    quote: `Olá, ${name}! Preparamos o orçamento da ordem ${order.id} para o ${order.device}, no valor de ${value}. Podemos prosseguir com o serviço?`,
+    status: `Olá, ${name}! A ordem ${order.id} do seu ${order.device} está com o status: ${statusLabel(order.status)}.`,
+    ready: `Olá, ${name}! Seu ${order.device} da ordem ${order.id} está pronto. Entre em contato para combinarmos a retirada ou devolução.`,
+    review: `Olá, ${name}! Esperamos que esteja tudo certo com o serviço da ordem ${order.id}. Sua avaliação ajuda muito a Cellf.${state.settings.googleReviewUrl ? ` Avalie aqui: ${state.settings.googleReviewUrl}` : ''}`
+  };
+  return messages[kind] || messages.status;
+}
+
+function orderWhatsappUrl(order, kind) {
+  const digits = String(order.phone || '').replace(/\D/g, '');
+  return digits ? `https://wa.me/55${digits}?text=${encodeURIComponent(orderWhatsappMessage(order, kind))}` : '';
+}
+
 function viewOrder(order) {
   if (!order) return;
   const service = serviceName(order.serviceId);
   const customer = transactionCustomer(order);
-  const digits = String(order.phone || '').replace(/\D/g, '');
-  const message = encodeURIComponent(`Olá, ${order.customer}! Sobre sua ordem ${order.id} (${order.device}): o status atual é ${statusLabel(order.status)}.`);
-  openModal(order.id, 'DETALHES DA ORDEM', `<div class="order-detail"><div class="order-detail-header"><div><span class="status ${statusMap[order.status]?.[1] || 'waiting'}">${esc(statusLabel(order.status))}</span><h3>${esc(order.device)}</h3><p>${esc(order.issue)}</p></div><strong class="order-detail-value">${order.value == null ? 'A consultar' : brl.format(order.value)}</strong></div><div class="detail-grid"><div class="field"><label>CLIENTE</label><strong>${esc(order.customer)}</strong><span class="field-help">${esc(order.phone || 'Sem telefone')}</span></div><div class="field"><label>CPF / CNPJ</label><strong>${esc(customer.document || 'Não informado')}</strong></div><div class="field"><label>ATENDIMENTO</label><strong>${esc(ATTENDANCE_LABELS[order.attendanceType] || ATTENDANCE_LABELS.in_store_service)}</strong></div><div class="field"><label>PAGAMENTO</label><strong>${esc(order.paymentDetails || PAYMENT_LABELS[order.payment] || 'Não informado')}</strong></div><div class="field"><label>IMEI</label><strong>${esc(order.imei || 'Não informado')}</strong></div><div class="field"><label>SERVIÇO</label><strong>${esc(service)}</strong></div><div class="field"><label>PREVISÃO DE ENTREGA</label><strong>${formatDate(order.dueAt)}</strong></div><div class="field"><label>ENTRADA</label><strong>${formatDate(order.createdAt)}</strong></div><div class="field"><label>GARANTIA</label><strong>${Number(order.warrantyDays ?? state.settings.warrantyDays ?? 0)} dias</strong></div></div>${order.deliveryAddress ? `<div class="detail-section address-detail-section"><h3>Endereço de busca e devolução</h3><p>${esc(formatAddress(order.deliveryAddress))}</p>${order.deliveryAddress.reference ? `<small>Referência: ${esc(order.deliveryAddress.reference)}</small>` : ''}</div>` : ''}${order.reminder ? `<div class="detail-section reminder-callout"><h3>Lembrete</h3><p>${esc(order.reminder)}</p><small>${formatDateTime(order.reminderAt)}</small></div>` : ''}${state.settings.orderNotes ? `<div class="detail-section"><h3>Condições e observações</h3><p>${esc(state.settings.orderNotes)}</p></div>` : ''}<div class="form-actions">${digits ? `<a class="ghost-button" href="https://wa.me/55${esc(digits)}?text=${message}" target="_blank" rel="noopener noreferrer">WhatsApp ↗</a>` : ''}<button class="ghost-button" data-action="edit-order" data-id="${esc(order.id)}">Editar</button>${order.value != null ? `<button class="ghost-button" data-action="print-order-receipt" data-id="${esc(order.id)}">Emitir recibo</button>` : ''}<button class="ghost-button" data-action="print-order-warranty" data-id="${esc(order.id)}">Emitir garantia</button>${order.status !== 'delivered' && order.status !== 'cancelled' ? `<button class="primary-button" data-action="deliver-order" data-id="${esc(order.id)}">✓ Marcar como entregue</button>` : ''}</div></div>`);
+  const checked = DEVICE_CHECKLIST.filter(([key]) => order.checklist?.[key]).map(([, label]) => label);
+  const photos = Array.isArray(order.photos) ? order.photos : [];
+  const whatsappActions = orderWhatsappUrl(order, 'status') ? `<section class="detail-section whatsapp-center"><h3>Mensagens rápidas</h3><div class="whatsapp-actions"><a class="ghost-button" href="${esc(orderWhatsappUrl(order, 'quote'))}" target="_blank" rel="noopener noreferrer">Enviar orçamento ↗</a><a class="ghost-button" href="${esc(orderWhatsappUrl(order, 'status'))}" target="_blank" rel="noopener noreferrer">Atualizar status ↗</a><a class="ghost-button" href="${esc(orderWhatsappUrl(order, 'ready'))}" target="_blank" rel="noopener noreferrer">Avisar que está pronto ↗</a>${order.status === 'delivered' ? `<a class="ghost-button" href="${esc(orderWhatsappUrl(order, 'review'))}" target="_blank" rel="noopener noreferrer">Pós-venda e avaliação ↗</a>` : ''}</div></section>` : '';
+  openModal(order.id, 'DETALHES DA ORDEM', `<div class="order-detail"><div class="order-detail-header"><div><div class="order-detail-badges"><span class="status ${statusMap[order.status]?.[1] || 'waiting'}">${esc(statusLabel(order.status))}</span><span class="quote-pill quote-${esc(order.quoteStatus || 'pending')}">${esc(QUOTE_STATUS_LABELS[order.quoteStatus] || QUOTE_STATUS_LABELS.pending)}</span></div><h3>${esc(order.device)}</h3><p>${esc(order.issue)}</p></div><strong class="order-detail-value">${order.value == null ? 'A consultar' : brl.format(order.value)}</strong></div><div class="detail-grid"><div class="field"><label>CLIENTE</label><strong>${esc(order.customer)}</strong><span class="field-help">${esc(order.phone || 'Sem telefone')}</span></div><div class="field"><label>CPF / CNPJ</label><strong>${esc(customer.document || 'Não informado')}</strong></div><div class="field"><label>ATENDIMENTO</label><strong>${esc(ATTENDANCE_LABELS[order.attendanceType] || ATTENDANCE_LABELS.in_store_service)}</strong></div><div class="field"><label>PAGAMENTO</label><strong>${esc(order.paymentDetails || PAYMENT_LABELS[order.payment] || 'Não informado')}</strong></div><div class="field"><label>IMEI</label><strong>${esc(order.imei || 'Não informado')}</strong></div><div class="field"><label>SERVIÇO</label><strong>${esc(service)}</strong></div><div class="field"><label>PREVISÃO DE ENTREGA</label><strong>${formatDate(order.dueAt)}</strong></div><div class="field"><label>ENTRADA</label><strong>${formatDate(order.createdAt)}</strong></div><div class="field"><label>GARANTIA</label><strong>${Number(order.warrantyDays ?? state.settings.warrantyDays ?? 0)} dias</strong></div></div>${order.technicalDescription || order.deviceCondition || order.accessories || checked.length ? `<section class="detail-section inspection-summary"><h3>Diagnóstico e checklist</h3>${order.technicalDescription ? `<p><strong>Descrição técnica:</strong> ${esc(order.technicalDescription)}</p>` : ''}${order.deviceCondition ? `<p><strong>Estado na entrada:</strong> ${esc(order.deviceCondition)}</p>` : ''}${order.accessories ? `<p><strong>Acessórios:</strong> ${esc(order.accessories)}</p>` : ''}${checked.length ? `<div class="checklist-readonly">${checked.map(label => `<span>✓ ${esc(label)}</span>`).join('')}</div>` : ''}</section>` : ''}${order.deliveryAddress ? `<div class="detail-section address-detail-section"><h3>Endereço de busca e devolução</h3><p>${esc(formatAddress(order.deliveryAddress))}</p>${order.deliveryAddress.reference ? `<small>Referência: ${esc(order.deliveryAddress.reference)}</small>` : ''}</div>` : ''}<section class="detail-section order-photos"><div class="section-heading-inline"><h3>Fotos e evidências</h3><button class="text-button" data-action="add-order-photo" data-id="${esc(order.id)}">＋ Adicionar foto</button></div>${photos.length ? `<div class="photo-evidence-list">${photos.map(photo => `<article><span aria-hidden="true">▧</span><div><strong>${esc(photo.caption || photo.filename)}</strong><small>${esc(photo.filename)} · ${formatDate(photo.createdAt)}</small></div><button class="icon-button" data-action="open-order-photo" data-id="${esc(order.id)}" data-photo-id="${esc(photo.id)}" aria-label="Abrir foto">↗</button><button class="icon-button document-remove" data-action="remove-order-photo" data-id="${esc(order.id)}" data-photo-id="${esc(photo.id)}" aria-label="Remover foto">×</button></article>`).join('')}</div>` : '<p class="field-help">Adicione fotos da entrada, do diagnóstico e da entrega para documentar o estado do aparelho.</p>'}</section>${whatsappActions}${order.reminder ? `<div class="detail-section reminder-callout"><h3>Lembrete</h3><p>${esc(order.reminder)}</p><small>${formatDateTime(order.reminderAt)}</small></div>` : ''}${state.settings.orderNotes ? `<div class="detail-section"><h3>Condições e observações</h3><p>${esc(state.settings.orderNotes)}</p></div>` : ''}<section class="detail-section document-center"><h3>Documentos e impressão</h3><div class="document-action-grid"><button class="ghost-button" data-action="print-order-quote" data-id="${esc(order.id)}">Orçamento / PDF</button><button class="ghost-button" data-action="print-service-order" data-id="${esc(order.id)}">Ordem de serviço</button><button class="ghost-button" data-action="print-order-thermal" data-id="${esc(order.id)}">Comprovante 80 mm</button><button class="ghost-button" data-action="print-order-label" data-id="${esc(order.id)}">Etiqueta 58 mm</button>${order.value != null ? `<button class="ghost-button" data-action="print-order-receipt" data-id="${esc(order.id)}">Recibo</button>` : ''}<button class="ghost-button" data-action="print-order-warranty" data-id="${esc(order.id)}">Garantia</button></div></section><div class="form-actions"><button class="ghost-button" data-action="edit-order" data-id="${esc(order.id)}">Editar</button>${order.status !== 'delivered' && order.status !== 'cancelled' ? `<button class="primary-button" data-action="deliver-order" data-id="${esc(order.id)}">✓ Marcar como entregue</button>` : ''}</div></div>`);
+}
+
+function orderPhotoModal(order) {
+  if (!order) return;
+  openModal('Adicionar foto', order.id, `<form id="order-photo-form" class="form-grid"><div class="field full"><label>DESCRIÇÃO DA FOTO</label><input name="caption" maxlength="120" placeholder="Ex.: Estado da tela na entrada"></div><div class="field full"><label>ARQUIVO DE IMAGEM *</label><input name="photo" type="file" accept="image/jpeg,image/png,image/webp" required><small class="field-help">JPG, PNG ou WebP, com até 10 MB. O arquivo será salvo no armazenamento privado do Supabase.</small></div>${formActions('Enviar foto')}</form>`);
+  document.querySelector('#order-photo-form')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const form = event.target;
+    const file = form.elements.photo?.files?.[0];
+    const validation = validateCompanyDocument(file);
+    if (!validation.valid || !['jpg', 'jpeg', 'png', 'webp'].includes(validation.extension)) return toast(validation.valid ? 'Envie uma imagem JPG, PNG ou WebP.' : validation.error, 'error');
+    const photo = { id: uid('photo'), storageId: uid('order-photo'), caption: String(form.elements.caption?.value || '').trim(), filename: file.name, size: Number(file.size), mimeType: file.type, createdAt: new Date().toISOString() };
+    const submit = form.querySelector('[type="submit"]');
+    if (submit) { submit.disabled = true; submit.textContent = 'Enviando para a nuvem…'; }
+    let uploaded = false;
+    try {
+      const upload = await saveCompanyDocument(photo.storageId, file, 'orders');
+      uploaded = true;
+      photo.storagePath = upload.path;
+      order.photos = [photo, ...(Array.isArray(order.photos) ? order.photos : [])];
+      recordActivity('order', `Foto adicionada à ${order.id}`);
+      saveState();
+      await flushStateSave();
+      viewOrder(order);
+      toast('Foto salva no Supabase.');
+    } catch (error) {
+      order.photos = (order.photos || []).filter(item => item.id !== photo.id);
+      if (uploaded) await deleteCompanyDocument(photo.storageId, 'orders').catch(() => {});
+      if (error?.status === 401 || error?.status === 503) handleCloudError(error);
+      toast(error?.message || 'Não foi possível salvar a foto.', 'error');
+      if (submit?.isConnected) { submit.disabled = false; submit.textContent = 'Enviar foto'; }
+    }
+  });
+}
+
+async function openOrderPhoto(orderId, photoId) {
+  const order = state.orders.find(item => item.id === orderId);
+  const photo = order?.photos?.find(item => item.id === photoId);
+  if (!photo) return toast('Foto não encontrada.', 'error');
+  try {
+    const url = await readCompanyDocument(photo.storageId, 'orders');
+    window.open(url, '_blank', 'noopener,noreferrer');
+  } catch (error) { toast(error?.message || 'Não foi possível abrir a foto.', 'error'); }
+}
+
+async function removeOrderPhoto(orderId, photoId) {
+  const order = state.orders.find(item => item.id === orderId);
+  const photo = order?.photos?.find(item => item.id === photoId);
+  if (!photo || !window.confirm(`Remover a foto “${photo.caption || photo.filename}”?`)) return;
+  try {
+    await deleteCompanyDocument(photo.storageId, 'orders');
+    order.photos = order.photos.filter(item => item.id !== photoId);
+    recordActivity('order', `Foto removida da ${order.id}`);
+    saveState();
+    await flushStateSave();
+    viewOrder(order);
+    toast('Foto removida.');
+  } catch (error) { toast(error?.message || 'Não foi possível remover a foto.', 'error'); }
 }
 
 function viewDelivery(delivery) {
@@ -2276,6 +2414,13 @@ document.addEventListener('click', event => {
     case 'print-sale-warranty': printSaleDocument(state.sales.find(item => item.id === id), 'garantia'); break;
     case 'print-order-receipt': printOrderDocument(state.orders.find(item => item.id === id), 'recibo'); break;
     case 'print-order-warranty': printOrderDocument(state.orders.find(item => item.id === id), 'garantia'); break;
+    case 'print-order-quote': printOrderDocument(state.orders.find(item => item.id === id), 'orcamento'); break;
+    case 'print-service-order': printOrderDocument(state.orders.find(item => item.id === id), 'ordem'); break;
+    case 'print-order-thermal': printOrderDocument(state.orders.find(item => item.id === id), 'ordem', 'thermal80'); break;
+    case 'print-order-label': printOrderDocument(state.orders.find(item => item.id === id), 'etiqueta', 'thermal58'); break;
+    case 'add-order-photo': orderPhotoModal(state.orders.find(item => item.id === id)); break;
+    case 'open-order-photo': openOrderPhoto(id, button.dataset.photoId); break;
+    case 'remove-order-photo': removeOrderPhoto(id, button.dataset.photoId); break;
     case 'view-delivery': viewDelivery(state.deliveries.find(item => item.id === id)); break;
     case 'add-cart-product': addCartProduct(id); break;
     case 'cart-increase': addCartProduct(id); break;
@@ -2307,6 +2452,7 @@ document.addEventListener('click', event => {
       const order = state.orders.find(item => item.id === id);
       if (!order) break;
       order.status = 'delivered';
+      if (order.quoteStatus === 'pending') order.quoteStatus = 'approved';
       order.deliveredAt = new Date().toISOString();
       completeOrderDeliveries(order);
       recordActivity('order', `${order.id} entregue a ${order.customer}`);
@@ -2340,6 +2486,10 @@ document.addEventListener('change', event => {
     const order = state.orders.find(item => item.id === event.target.dataset.id);
     if (!order) return;
     order.status = event.target.value;
+    if (['approved', 'progress', 'ready', 'delivered'].includes(order.status) && order.quoteStatus === 'pending') {
+      order.quoteStatus = 'approved';
+      order.quoteDecidedAt ||= new Date().toISOString();
+    }
     order.deliveredAt = order.status === 'delivered' ? order.deliveredAt || new Date().toISOString() : '';
     if (order.status === 'delivered') completeOrderDeliveries(order);
     if (order.status === 'cancelled') syncRepairDeliveries(order, state.customers.find(customer => customer.id === order.customerId), order.deliveryAddress);
