@@ -253,7 +253,7 @@ test('o foco de teclado permanece visível e não depende somente da cor', () =>
 test('o link de salto é oculto visualmente e aparece ao receber foco', () => {
   assertProperty('.skip-link', 'position', /fixed|absolute/iu);
   assertProperty('.skip-link', 'transform', /translateY\(\s*-\d/iu);
-  assertProperty('.skip-link:focus', 'transform', /translateY\(\s*0/iu);
+  assertProperty('.skip-link:focus-visible', 'transform', /translateY\(\s*0/iu);
 });
 
 test('os rótulos exclusivos para leitores de tela permanecem acessíveis', () => {

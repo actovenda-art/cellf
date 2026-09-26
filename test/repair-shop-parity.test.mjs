@@ -24,7 +24,7 @@ test('fotos das ordens usam escopo privado próprio no Supabase Storage', () => 
   assert.match(app, /saveCompanyDocument\(photo\.storageId, file, 'orders'\)/u);
   assert.match(app, /readCompanyDocument\(photo\.storageId, 'orders'\)/u);
   assert.match(app, /deleteCompanyDocument\(photo\.storageId, 'orders'\)/u);
-  assert.match(documentsApi, /\['company', 'orders'\]/u);
+  assert.match(documentsApi, /\['company', 'orders', 'devices'\]/u);
   assert.doesNotMatch(app, /\blocalStorage\b|\bsessionStorage\b|\bindexedDB\b/iu);
 });
 

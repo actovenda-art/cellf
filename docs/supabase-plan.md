@@ -1,6 +1,6 @@
 # Plano de dados para o Supabase
 
-Este documento é uma proposta para a próxima etapa. Nenhuma tabela foi criada ainda.
+Este documento é uma proposta histórica de evolução para um modelo normalizado. A aplicação atual já persiste no Supabase por meio de `cellf_app_state` e de um bucket privado de documentos. As entidades abaixo são propostas futuras, não uma descrição do esquema em produção.
 
 ## Entidades principais
 

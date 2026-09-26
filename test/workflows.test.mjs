@@ -892,8 +892,8 @@ test('falhas na persistência remota são comunicadas sem derrubar a aplicação
     code: 'SUPABASE_UNAVAILABLE',
     status: 503
   });
-  assert.equal(api.companyDocumentStorageAvailable(), false);
-  assert.match(document.querySelector('#app-content').innerHTML, /(?:Supabase|Configuração necessária)/iu);
+  assert.equal(api.companyDocumentStorageAvailable(), true, 'Uma indisponibilidade transitória não encerra a sessão nem apaga a configuração');
+  assert.doesNotMatch(document.querySelector('#app-content').innerHTML, /Configuração necessária/iu);
 });
 
 test('a agenda combina compromissos, entregas, lembretes e contas a pagar', () => {
@@ -939,6 +939,17 @@ test('compromissos utilizam horário e duração padrão quando não informados'
   assert.equal(appointment.duration, 30);
   assert.equal(appointment.subtitle, 'Atendimento');
   assert.equal(appointment.status, 'scheduled');
+});
+
+test('relatório não duplica serviço cobrado junto com produto no PDV',()=>{
+  const today=dateOffset();
+  const {api}=createApplication({stored:fixture({
+    orders:[{id:'OS-combined',customer:'Cliente de Teste',device:'Telefone',status:'delivered',value:200,serviceCost:80,createdAt:today,deliveredAt:today}],
+    sales:[{id:'sale-combined',status:'paid',total:300,servicePayment:{orderId:'OS-combined',amount:200},createdAt:today,items:[{productId:'produto-capa',quantity:1,unitPrice:100,cost:20}]}],payables:[]
+  })});
+  const report=api.reportData();
+  assert.equal(report.revenue,300);assert.equal(report.salesRevenue,100);assert.equal(report.serviceRevenue,200);
+  assert.equal(report.totalProfit,200);assert.equal(report.productCount,1);
 });
 
 test('o relatório calcula faturamento, custos, despesas e resultado líquido', () => {

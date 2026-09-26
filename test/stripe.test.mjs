@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createStripeHandler } from '../api/stripe.mjs';
+import { createStripeHandler, updateStripeSale } from '../api/stripe.mjs';
 import { createStripeWebhookHandler } from '../api/stripe-webhook.mjs';
 import { hashPassword, issueSession, SESSION_COOKIE_NAME } from '../api/supabase.mjs';
 
@@ -60,7 +60,7 @@ function installSupabaseState(context, initialState) {
     const payload = JSON.parse(options.body);
     state = structuredClone(payload.state);
     writes.push(structuredClone(state));
-    return { ok: true, status: 201, json: async () => null };
+    return { ok: true, status: 201, json: async () => [{state,updated_at:payload.updated_at}] };
   };
   context.after(() => { globalThis.fetch = previousFetch; });
   return { get state() { return state; }, writes };
@@ -89,6 +89,28 @@ function pendingSaleState() {
     activity: []
   };
 }
+
+test('cobrança combinada Stripe baixa o serviço uma única vez e retira aparelho da vitrine',async context=>{
+  configureEnvironment(context);
+  const initial=pendingSaleState();
+  initial.products[0].stock=2;
+  initial.orders=[{id:'OS-1',value:100,receiptsTracked:true}];
+  initial.devices=[{id:'d1',productId:'produto-1',status:'available',published:true}];
+  initial.sales[0].servicePayment={orderId:'OS-1',amount:100};
+  initial.sales[0].total=150;
+  const remote=installSupabaseState(context,initial);
+  const session={id:'cs_test_combined',client_reference_id:'venda-stripe-1',payment_status:'paid',amount_total:15000,currency:'brl'};
+  await updateStripeSale(session);await updateStripeSale(session);
+  assert.equal(remote.state.receipts.length,1);assert.equal(remote.state.receipts[0].amount,100);
+  assert.equal(remote.state.products[0].stock,0);assert.equal(remote.state.devices[0].published,false);
+});
+test('Stripe não sobrescreve uma alteração simultânea do caixa',async context=>{
+  configureEnvironment(context);
+  const previous=globalThis.fetch;
+  globalThis.fetch=async (_url,options)=>({ok:true,json:async()=>options.method==='GET'?[{state:pendingSaleState(),updated_at:'2026-09-25T12:00:00.000Z'}]:[]});
+  context.after(()=>globalThis.fetch=previous);
+  await assert.rejects(updateStripeSale({id:'cs_test_conflict',client_reference_id:'venda-stripe-1',payment_status:'paid',amount_total:5000,currency:'brl'}),e=>e.code==='STATE_CONFLICT');
+});
 
 test('o checkout da Stripe é criado no servidor em reais e sem expor a chave secreta', async context => {
   configureEnvironment(context);

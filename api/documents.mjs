@@ -4,11 +4,11 @@ import {
   getSupabaseConfig,
   queryValue,
   readJsonBody,
-  requireAuthenticatedSession,
   sendApiError,
   sendJson,
   supabaseRequest
 } from './supabase.mjs';
+import { accessFor, requireModule } from './access.mjs';
 
 const DOCUMENT_TYPES = new Map([
   ['pdf', ['application/pdf']],
@@ -34,7 +34,7 @@ function validatedId(value) {
 
 function validatedScope(value) {
   const scope = typeof value === 'string' && value.trim() ? value.trim() : 'company';
-  if (!['company', 'orders'].includes(scope)) {
+  if (!['company', 'orders', 'devices'].includes(scope)) {
     throw new ApiError(400, 'INVALID_DOCUMENT_SCOPE', 'A categoria do arquivo é inválida.');
   }
   return scope;
@@ -112,7 +112,7 @@ export default async function handler(request, response) {
   }
 
   try {
-    requireAuthenticatedSession(request);
+    const access = await accessFor(request);
     const config = getSupabaseConfig();
 
     if (method === 'POST') {
@@ -120,6 +120,8 @@ export default async function handler(request, response) {
         throw new ApiError(400, 'INVALID_OPERATION', 'A operação de envio do documento é inválida.');
       }
       const document = validateUpload(await readJsonBody(request, { maxBytes: 8 * 1024 }));
+      const scope = document.path.split('/')[0];
+      if (!access.admin) requireModule(access, scope === 'company' ? 'settings' : scope);
       const result = await supabaseRequest(
         '/storage/v1/object/upload/sign/' + encodedObjectPath(config, document.path),
         { method: 'POST', body: {} }
@@ -134,6 +136,7 @@ export default async function handler(request, response) {
 
     const id = validatedId(queryValue(request, 'id'));
     const scope = validatedScope(queryValue(request, 'scope'));
+    if (!access.admin) requireModule(access, scope === 'company' ? 'settings' : scope);
     const path = documentPath(scope, id);
 
     if (method === 'GET') {

@@ -11,6 +11,7 @@ import {
   setSessionCookie,
   verifyCredentials
 } from './supabase.mjs';
+import { readTeam, passwordMatches, accessFor } from './access.mjs';
 
 export default async function handler(request, response) {
   const method = String(request.method || 'GET').toUpperCase();
@@ -29,10 +30,12 @@ export default async function handler(request, response) {
         throw new ApiError(503, 'AUTH_NOT_CONFIGURED', 'O acesso seguro da Cellf ainda não foi configurado.');
       }
       const session = readSession(request);
+      const access = session ? await accessFor(request) : null;
       return sendJson(response, 200, {
         authenticated: Boolean(session),
         expiresAt: session ? new Date(session.exp * 1000).toISOString() : null,
-        email: session?.email || null
+        email: session?.email || null,
+        access
       });
     }
 
@@ -48,11 +51,17 @@ export default async function handler(request, response) {
     }
 
     const body = await readJsonBody(request, { maxBytes: 4 * 1024 });
+    let employee = null;
     if (!verifyCredentials(body.email, body.password)) {
-      throw new ApiError(401, 'INVALID_CREDENTIALS', 'E-mail ou senha incorretos.');
+      if (String(body.email || '').trim().toLowerCase() === String(process.env.CELLF_ADMIN_EMAIL || '').trim().toLowerCase()) throw new ApiError(401, 'INVALID_CREDENTIALS', 'E-mail ou senha incorretos.');
+      const record = await readTeam().catch(() => null);
+      employee = record?.state?.users?.find(u => u.active && u.email === String(body.email || '').trim().toLowerCase());
+      if (!employee || !passwordMatches(body.password, employee.passwordHash)) {
+        throw new ApiError(401, 'INVALID_CREDENTIALS', 'E-mail ou senha incorretos.');
+      }
     }
 
-    const session = issueSession(body.email);
+    const session = issueSession(body.email, employee);
     setSessionCookie(response, request, session.token);
     return sendJson(response, 200, {
       authenticated: true,

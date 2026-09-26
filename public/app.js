@@ -10,7 +10,10 @@ const DEVICE_CHECKLIST = [
   ['audio', 'Áudio e microfone'],
   ['buttons', 'Botões'],
   ['charging', 'Conector de carga'],
-  ['biometrics', 'Biometria / Face ID']
+  ['biometrics', 'Biometria / Face ID'],
+  ['wifi', 'Wi-Fi e Bluetooth'],
+  ['battery', 'Bateria'],
+  ['network', 'Rede e chip']
 ];
 const OPERATIONAL_DATA_VERSION = 'controle-cellf-2026-09-v1';
 const ANONYMOUS_CUSTOMER = 'Cliente sem identificação';
@@ -152,6 +155,10 @@ let stateSaveTimer = null;
 let activeStateSavePromise = null;
 let applicationReady = false;
 let applicationBootstrapPromise = null;
+let currentAccess = { admin: true, modules: [], financial: true };
+let cellfExtraViews = {};
+let cellfExtensions = null;
+function canAccess(view) { return currentAccess.admin || (view === 'dashboard' ? currentAccess.financial && currentAccess.modules.includes('reports') : currentAccess.modules.includes(view)); }
 const content = document.querySelector('#app-content');
 const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const dateFmt = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' });
@@ -290,7 +297,7 @@ function handleCloudError(error, { showAccessScreen = true } = {}) {
     if (showAccessScreen) renderCloudAccess('login', error.message || 'Sua sessão expirou. Entre novamente para continuar.');
     return;
   }
-  if (error?.status === 503 || /NOT_CONFIGURED|CONFIGURATION/i.test(String(error?.code || ''))) {
+  if (/NOT_CONFIGURED|CONFIGURATION/i.test(String(error?.code || ''))) {
     setCloudStatus('unconfigured');
     if (showAccessScreen) renderCloudAccess('configuration', error.message);
     return;
@@ -344,7 +351,7 @@ async function flushStateSave() {
       const payload = await apiRequest('/api/state', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ state })
+        body: JSON.stringify({ state, updatedAt: cloudConnection.updatedAt })
       });
       persistedStateRevision = revision;
       cloudConnection.updatedAt = payload.updatedAt || new Date().toISOString();
@@ -582,6 +589,7 @@ function recordActivity(kind, description) {
   state.activity = state.activity.slice(0, 80);
 }
 function statusLabel(status) { return statusMap[status]?.[0] || status; }
+function checklistStatus(value) { return value === true || value === 'ok' ? 'OK' : value === 'attention' ? 'Atenção' : 'Não testado'; }
 function serviceName(id) { return state.services.find(s => s.id === id)?.name || 'Serviço personalizado'; }
 function orderParts(order = {}) { return Array.isArray(order.parts) ? order.parts : []; }
 function orderPartsCost(parts = []) { return parts.reduce((total, part) => total + Number(part.cost || 0) * Number(part.quantity || 0), 0); }
@@ -653,7 +661,7 @@ function renderDashboard() {
   const payable = sum(openPayables);
   const todaySales = state.sales.filter(sale => String(sale.createdAt).slice(0, 10) === today && sale.status === 'paid');
   const todayServices = state.orders.filter(order => order.status === 'delivered' && String(order.deliveredAt || order.createdAt).slice(0, 10) === today);
-  const todayRevenue = sum(todaySales, 'total') + sum(todayServices, 'value');
+  const todayRevenue = productSalesRevenue(todaySales) + sum(todayServices, 'value');
   const dailyGoal = Number(state.settings.dailyRevenueGoal || 0);
   const goalProgress = dailyGoal ? Math.min(Math.round((todayRevenue / dailyGoal) * 100), 999) : 0;
   const recentOrders = [...state.orders].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 5);
@@ -753,6 +761,7 @@ function renderCustomers() {
     <div class="summary-strip insight-grid">${statCard('CLIENTES ATIVOS', active.length, '♧', `${state.customers.length - active.length} inativos`)}${statCard('CLIENTES RECORRENTES', recurring.length, '↻', 'Com mais de um atendimento')}${statCard('NOVOS ESTE MÊS', recent.length, '＋', 'Cadastros no mês atual')}${statCard('COM ORDENS ABERTAS', active.filter(customer => customerOrders(customer).some(order => !['delivered', 'cancelled'].includes(order.status))).length, '⌁', 'Acompanhamento em andamento')}</div>
     ${tableShell('customers', '<option value="">Todos os clientes</option><option value="active-orders">Com ordens abertas</option><option value="recurring">Recorrentes</option><option value="inactive">Inativos</option>', customerRows(state.customers), customerMobile(state.customers), state.customers.length)}`;
   bindTableFilter('customers');
+  cellfExtensions?.renderRelationships();
 }
 
 function customerRows(list) {
@@ -760,7 +769,7 @@ function customerRows(list) {
     const orders = customerOrders(customer);
     const sales = customerSales(customer);
     const last = [...orders.map(order => order.createdAt), ...sales.map(sale => String(sale.createdAt).slice(0, 10))].filter(Boolean).sort().at(-1);
-    const total = sum(orders.filter(order => order.status !== 'cancelled'), 'value') + sum(sales.filter(sale => sale.status === 'paid'), 'total');
+    const total = sum(orders.filter(order => order.status !== 'cancelled'), 'value') + productSalesRevenue(sales.filter(sale => sale.status === 'paid'));
     return `<tr><td><div class="cell-main"><span class="customer-avatar avatar">${esc(initials(customer.name))}</span><span><strong>${esc(customer.name)}</strong><small>${customer.active === false ? 'Cadastro inativo' : esc(customer.document || 'Cliente Cellf')}</small></span></div></td><td>${esc(customer.phone || '—')}<br><small>${esc(customer.email || 'Sem e-mail')}</small></td><td>${orders.length} ${orders.length === 1 ? 'ordem' : 'ordens'} · ${sales.length} ${sales.length === 1 ? 'venda' : 'vendas'}</td><td class="money">${brl.format(total)}</td><td>${formatDate(last)}</td><td><button class="more-button" data-action="view-customer" data-id="${esc(customer.id)}" aria-label="Ver ${esc(customer.name)}">•••</button></td></tr>`;
   }).join('') : '<tr><td colspan="6"><div class="table-empty">Nenhum cliente encontrado.</div></td></tr>'}</tbody>`;
 }
@@ -779,7 +788,7 @@ function renderOrders() {
   const conversion = quotes.length ? Math.round((approvedQuotes.length / quotes.length) * 100) : 0;
   content.innerHTML = `${pageHeading('ASSISTÊNCIA TÉCNICA', 'Ordens de serviço', `${open.length} ordens em acompanhamento`, '<button class="ghost-button" data-view="agenda">◷ Agenda de entregas</button><button class="primary-button" data-action="new-order">＋ Nova ordem</button>')}
   <div class="summary-strip insight-grid">${statCard('EM ANÁLISE', state.orders.filter(order => order.status === 'analysis').length, '⌕', 'Aguardando diagnóstico')}${statCard('CONVERSÃO DE ORÇAMENTOS', `${conversion}%`, '↗', `${approvedQuotes.length} aprovados · ${pendingQuotes.length} pendentes`)}${statCard('PRONTAS', state.orders.filter(order => order.status === 'ready').length, '✓', 'Disponíveis para retirada')}${statCard('VALOR EM ABERTO', brl.format(sum(open, 'value')), '⌁', `${overdue.length} com prazo vencido · ${completed.length} entregues`)}</div>
-  <section class="repair-bench" aria-labelledby="repair-bench-title"><header><div><p class="eyebrow">MESA TÉCNICA</p><h2 id="repair-bench-title">Fluxo da bancada</h2></div><small>Abra uma ordem para consultar checklist, fotos e orçamento</small></header><div class="repair-bench-grid">${[['analysis','Em análise'],['waiting','Aguardando'],['progress','Em reparo'],['ready','Prontos']].map(([status, label]) => { const items = state.orders.filter(order => order.status === status || status === 'progress' && order.status === 'approved'); return `<div class="bench-column"><div class="bench-column-heading"><strong>${label}</strong><span>${items.length}</span></div>${items.length ? items.slice(0, 4).map(order => `<button data-action="view-order" data-id="${esc(order.id)}"><strong>${esc(order.device)}</strong><small>${esc(order.customer)} · ${esc(order.id)}</small><span>${order.value == null ? 'A consultar' : brl.format(order.value)}</span></button>`).join('') : '<p>Nenhuma ordem</p>'}</div>`; }).join('')}</div></section>
+  <section class="repair-bench" aria-labelledby="repair-bench-title"><header><div><p class="eyebrow">MESA TÉCNICA</p><h2 id="repair-bench-title">Fluxo da bancada</h2></div><small>Abra uma ordem para consultar checklist, fotos e orçamento</small></header><div class="repair-bench-grid">${[['analysis','Em análise'],['waiting','Aguardando'],['progress','Em reparo'],['ready','Prontos']].map(([status, label]) => { const items = state.orders.filter(order => order.status === status || status === 'progress' && order.status === 'approved'); return `<div class="bench-column"><div class="bench-column-heading"><strong>${label}</strong><span>${items.length}</span></div>${items.length ? items.map(order => `<button data-action="view-order" data-id="${esc(order.id)}"><strong>${esc(order.device)}</strong><small>${esc(order.customer)} · ${esc(order.id)}</small><span>${order.value == null ? 'A consultar' : brl.format(order.value)}</span></button>`).join('') : '<p>Nenhuma ordem</p>'}</div>`; }).join('')}</div></section>
   ${tableShell('orders', `<option value="">Todos os status</option><option value="quote-pending">Orçamento pendente</option><option value="quote-approved">Orçamento aprovado</option><option value="quote-rejected">Orçamento recusado</option><option value="overdue">Prazo vencido</option>${Object.entries(statusMap).map(([value, [label]]) => `<option value="${value}">${label}</option>`).join('')}`, orderRows(state.orders), orderMobile(state.orders), state.orders.length)}`;
   bindTableFilter('orders');
 }
@@ -873,12 +882,12 @@ function renderSales() {
       <aside class="card pos-cart"><header class="card-header"><div><p class="eyebrow">CAIXA</p><h2>Venda atual</h2></div>${cart.items.length ? '<button class="text-button" data-action="clear-cart">Limpar</button>' : ''}</header>
         <div class="pos-cart-content">${cart.items.length ? cart.items.map(item => `<div class="cart-item"><div class="cart-item-info"><strong>${esc(item.name)}</strong><small>${brl.format(item.unitPrice)} cada</small></div><div class="cart-item-actions"><button class="icon-action" data-action="cart-decrease" data-id="${esc(item.productId)}" aria-label="Diminuir quantidade">−</button><strong>${item.quantity}</strong><button class="icon-action" data-action="cart-increase" data-id="${esc(item.productId)}" aria-label="Aumentar quantidade">＋</button></div><strong class="money">${brl.format(item.quantity * item.unitPrice)}</strong></div>`).join('') : emptyState('Sua venda começa aqui', 'Escolha produtos ao lado para adicionar ao carrinho.')}
           ${cart.items.length ? `<div class="cart-fields"><div class="field"><label for="sale-attendance-type">TIPO DE ATENDIMENTO</label><select id="sale-attendance-type" data-action="sale-attendance-type"><option value="counter_sale" ${!deliverySale ? 'selected' : ''}>${ATTENDANCE_LABELS.counter_sale}</option><option value="delivery" ${deliverySale ? 'selected' : ''}>${ATTENDANCE_LABELS.delivery}</option></select></div><div class="field"><label for="sale-customer">CLIENTE${deliverySale ? ' *' : ''}</label><select id="sale-customer" data-action="sale-customer"><option value="">${deliverySale ? 'Selecione o cliente da entrega' : 'Cliente de balcão'}</option>${activeCustomers.map(customer => `<option value="${esc(customer.id)}" ${customer.id === cart.customerId ? 'selected' : ''}>${esc(customer.name)}${customer.document ? ` · ${esc(formatCpfCnpj(customer.document))}` : ''}</option>`).join('')}</select><small class="field-help">Selecione um cliente com CPF/CNPJ para emitir comprovante, recibo e garantia nominais.</small></div>${deliverySale ? `<section class="sale-delivery-address"><div class="address-form-heading"><h3>Endereço deste pedido</h3><p>Informado somente nesta entrega, sem alterar o cadastro do cliente.</p></div><div class="form-grid sale-address-grid">${addressFieldsMarkup(cart.deliveryAddress || {}, { required: true, action: 'sale-address-field' })}</div></section>` : ''}<div class="field"><label for="sale-payment">FORMA DE PAGAMENTO</label><select id="sale-payment" data-action="sale-payment">${Object.entries(PAYMENT_LABELS).map(([value, label]) => `<option value="${value}" ${value === cart.payment ? 'selected' : ''}>${label}</option>`).join('')}</select>${cart.payment === 'stripe' ? '<small class="field-help stripe-payment-help">Pagamento seguro por cartão, Pix ou carteira habilitada na Stripe.</small>' : ''}</div><div class="field"><label for="sale-discount">DESCONTO (R$)</label><input id="sale-discount" data-action="sale-discount" type="number" min="0" step="0.01" value="${cart.discount || ''}" placeholder="0,00"></div></div>
-          <div class="cart-summary"><div><span>Subtotal</span><strong>${brl.format(cartSubtotal())}</strong></div><div><span>Desconto</span><strong>− ${brl.format(Math.min(Number(cart.discount || 0), cartSubtotal()))}</strong></div><div class="cart-total"><span>Total a receber</span><strong>${brl.format(cartTotal())}</strong></div></div><button class="primary-button pos-checkout${cart.payment === 'stripe' ? ' stripe-checkout-button' : ''}" data-action="complete-sale">${cart.payment === 'stripe' ? '↗ Cobrar com Stripe' : '✓ Finalizar venda'}</button>` : ''}
+          <div class="cart-summary"><div><span>Subtotal</span><strong>${brl.format(cartSubtotal())}</strong></div><div><span>Desconto</span><strong>− ${brl.format(Math.min(Number(cart.discount || 0), cartProductSubtotal()))}</strong></div><div class="cart-total"><span>Total a receber</span><strong>${brl.format(cartTotal())}</strong></div></div><button class="primary-button pos-checkout${cart.payment === 'stripe' ? ' stripe-checkout-button' : ''}" data-action="complete-sale">${cart.payment === 'stripe' ? '↗ Cobrar com Stripe' : '✓ Finalizar venda'}</button>` : ''}
         </div>
       </aside>
     </div>
     <section class="card sale-history"><header class="card-header"><div><p class="eyebrow">MOVIMENTO</p><h2>Últimas vendas</h2></div><button class="text-button" data-action="export-sales">Exportar CSV ↓</button></header>
-      ${state.sales.length ? `<table class="data-table"><thead><tr><th>VENDA</th><th>CLIENTE / ATENDIMENTO</th><th>ITENS</th><th>PAGAMENTO</th><th>STATUS</th><th>DATA</th><th>TOTAL</th><th><span class="sr-only">Ações</span></th></tr></thead><tbody>${state.sales.slice(0, 12).map(sale => `<tr><td><strong>${esc(sale.id.toUpperCase())}</strong></td><td>${esc(sale.customer || 'Cliente de balcão')}<br><small>${esc(ATTENDANCE_LABELS[sale.attendanceType] || ATTENDANCE_LABELS.counter_sale)}</small></td><td>${sale.items.reduce((total, item) => total + item.quantity, 0)} un.</td><td>${esc(paymentLabel(sale))}</td><td>${saleStatusMarkup(sale)}</td><td>${formatDateTime(sale.createdAt)}</td><td class="money">${brl.format(sale.total)}</td><td><button class="more-button" data-action="view-sale" data-id="${esc(sale.id)}">•••</button></td></tr>`).join('')}</tbody></table><div class="mobile-cards">${state.sales.slice(0, 12).map(sale => `<article class="mobile-card"><div class="mobile-card-top"><div><strong>${esc(sale.customer || 'Cliente de balcão')}</strong><small>${esc(ATTENDANCE_LABELS[sale.attendanceType] || ATTENDANCE_LABELS.counter_sale)} · ${formatDateTime(sale.createdAt)}</small></div><button class="more-button" data-action="view-sale" data-id="${esc(sale.id)}">•••</button></div><div class="mobile-card-bottom"><span>${saleStatusMarkup(sale)}</span><strong class="money">${brl.format(sale.total)}</strong></div></article>`).join('')}</div>` : emptyState('Nenhuma venda registrada', 'Finalize uma venda para acompanhar o histórico do caixa.')}
+      ${state.sales.length ? `<table class="data-table"><thead><tr><th>VENDA</th><th>CLIENTE / ATENDIMENTO</th><th>ITENS</th><th>PAGAMENTO</th><th>STATUS</th><th>DATA</th><th>TOTAL</th><th><span class="sr-only">Ações</span></th></tr></thead><tbody>${state.sales.map(sale => `<tr><td><strong>${esc(sale.id.toUpperCase())}</strong></td><td>${esc(sale.customer || 'Cliente de balcão')}<br><small>${esc(ATTENDANCE_LABELS[sale.attendanceType] || ATTENDANCE_LABELS.counter_sale)}</small></td><td>${sale.items.reduce((total, item) => total + item.quantity, 0)} un.</td><td>${esc(paymentLabel(sale))}</td><td>${saleStatusMarkup(sale)}</td><td>${formatDateTime(sale.createdAt)}</td><td class="money">${brl.format(sale.total)}</td><td><button class="more-button" data-action="view-sale" data-id="${esc(sale.id)}">•••</button></td></tr>`).join('')}</tbody></table><div class="mobile-cards">${state.sales.map(sale => `<article class="mobile-card"><div class="mobile-card-top"><div><strong>${esc(sale.customer || 'Cliente de balcão')}</strong><small>${esc(ATTENDANCE_LABELS[sale.attendanceType] || ATTENDANCE_LABELS.counter_sale)} · ${formatDateTime(sale.createdAt)}</small></div><button class="more-button" data-action="view-sale" data-id="${esc(sale.id)}">•••</button></div><div class="mobile-card-bottom"><span>${saleStatusMarkup(sale)}</span><strong class="money">${brl.format(sale.total)}</strong></div></article>`).join('')}</div>` : emptyState('Nenhuma venda registrada', 'Finalize uma venda para acompanhar o histórico do caixa.')}
     </section>`;
 
   associateFormLabels(content);
@@ -890,10 +899,20 @@ function renderSales() {
     search?.focus();
     search?.setSelectionRange(position, position);
   });
+  cellfExtensions?.decorateSales(cart);
 }
 
-function cartSubtotal() { return cart.items.reduce((total, item) => total + item.quantity * item.unitPrice, 0); }
-function cartTotal() { return Math.max(0, cartSubtotal() - Math.min(Number(cart.discount || 0), cartSubtotal())); }
+function cartProductSubtotal() { return cart.items.reduce((total, item) => total + item.quantity * item.unitPrice, 0); }
+function productSalesRevenue(sales) { return sales.reduce((sum,s)=>sum+Number(s.total || 0)-Number(s.servicePayment?.amount || 0),0); }
+function cartServicePayment() {
+  if (!cart.includeService || !cart.sourceOrderId) return null;
+  const order = state.orders.find(o=>o.id===cart.sourceOrderId && o.status!=='cancelled');
+  const pending = state.sales.filter(s=>s.status==='pending_payment' && s.servicePayment?.orderId===order?.id).reduce((sum,s)=>sum+Number(s.servicePayment.amount),0);
+  const amount = order ? Math.max(0, Number(order.value || 0) - (cellfExtensions?.received(order) || 0) - pending) : 0;
+  return amount >= 0.005 ? { orderId: order.id, amount: Math.round(amount*100)/100 } : null;
+}
+function cartSubtotal() { return cartProductSubtotal() + Number(cartServicePayment()?.amount || 0); }
+function cartTotal() { return Math.max(0, cartSubtotal() - Math.min(Number(cart.discount || 0), cartProductSubtotal())); }
 function pendingStripeQuantity(productId) { return state.sales.filter(sale => sale.payment === 'stripe' && sale.status === 'pending_payment').reduce((total, sale) => total + (sale.items || []).filter(item => item.productId === productId).reduce((quantity, item) => quantity + Number(item.quantity || 0), 0), 0); }
 function availableProductStock(productId) { const product = state.products.find(item => item.id === productId); return Number(product?.stock || 0) - pendingStripeQuantity(productId); }
 function saleStatusMarkup(sale) {
@@ -903,10 +922,10 @@ function saleStatusMarkup(sale) {
   return '<span class="status overdue">Cancelada</span>';
 }
 function updateCartSummary() {
-  const rows = document.querySelectorAll('.pos-cart .cart-summary > div');
+  const rows = document.querySelectorAll('.pos-cart .cart-summary > div:not(.service-checkout-line)');
   if (rows.length < 3) return;
   rows[0].querySelector('strong').textContent = brl.format(cartSubtotal());
-  rows[1].querySelector('strong').textContent = `− ${brl.format(Math.min(Number(cart.discount || 0), cartSubtotal()))}`;
+  rows[1].querySelector('strong').textContent = `− ${brl.format(Math.min(Number(cart.discount || 0), cartProductSubtotal()))}`;
   rows[2].querySelector('strong').textContent = brl.format(cartTotal());
 }
 
@@ -934,6 +953,8 @@ function validateCartForSale() {
   }
 
   const customer = state.customers.find(entry => entry.id === cart.customerId);
+  if (cart.sourceOrderId && !state.orders.some(o => o.id === cart.sourceOrderId && o.status !== 'cancelled' && (o.customerId || '') === (cart.customerId || ''))) return toast('Confira o cliente da ordem vinculada à venda.', 'error');
+  if (cartServicePayment() && !currentAccess.admin && !currentAccess.modules.includes('cash')) return toast('A cobrança do serviço exige permissão de Caixa.', 'error');
   const deliverySale = cart.attendanceType === 'delivery';
   if (deliverySale && !customer) return toast('Selecione o cliente para realizar uma entrega.', 'error');
   const deliveryAddress = deliverySale && cart.deliveryAddress ? normalizeAddress(cart.deliveryAddress) : null;
@@ -948,13 +969,15 @@ function saleFromCart({ status = 'paid', payment = cart.payment } = {}) {
   const { customer, deliverySale, deliveryAddress } = validation;
   return {
     id: uid('v'),
+    sourceOrderId: cart.sourceOrderId || '',
+    servicePayment: cartServicePayment(),
     customerId: customer?.id || '',
     customer: customer?.name || 'Cliente de balcão',
     customerDocument: formatCpfCnpj(customer?.document || ''),
     customerPhone: customer?.phone || '',
     items: cart.items.map(item => ({ ...item })),
     subtotal: cartSubtotal(),
-    discount: Math.min(Number(cart.discount || 0), cartSubtotal()),
+    discount: Math.min(Number(cart.discount || 0), cartProductSubtotal()),
     total: cartTotal(),
     payment,
     paymentDetails: PAYMENT_LABELS[payment] || payment,
@@ -973,10 +996,13 @@ function applyPaidSale(sale, { createDelivery = true } = {}) {
   for (const item of sale.items) {
     const product = state.products.find(entry => entry.id === item.productId);
     product.stock -= item.quantity;
+    const device = (state.devices || []).find(entry => entry.productId === product.id);
+    if (device && product.stock <= 0) { device.status = 'sold'; device.published = false; }
     state.stockMovements.unshift({ id: uid('mov'), productId: product.id, productName: product.name, type: 'out', quantity: item.quantity, reason: `Venda ${sale.id.toUpperCase()}`, createdAt: sale.createdAt });
   }
 
   state.sales.unshift(sale);
+  cellfExtensions?.recordSaleReceipt(sale);
   if (createDelivery && sale.attendanceType === 'delivery') state.deliveries.unshift(createDeliveryRecord({ sourceType: 'sale', sourceId: sale.id, kind: 'sale_delivery', customer, address: sale.deliveryAddress, scheduledDate: isoToday() }));
   state.stockMovements = state.stockMovements.slice(0, 200);
   recordActivity('sale', `Venda ${sale.id.toUpperCase()} concluída · ${brl.format(sale.total)}`);
@@ -1081,7 +1107,7 @@ function openPrintableDocument({ title, number, customer, issuedAt, body, total 
   const thermal = paper === 'thermal80' || paper === 'thermal58';
   const width = paper === 'thermal58' ? '58mm' : paper === 'thermal80' ? '80mm' : '210mm';
   const pageSize = thermal ? width : 'A4';
-  popup.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(title)} ${esc(number)}</title><style>*{box-sizing:border-box}body{font:${thermal ? '11px/1.35' : '14px/1.5'} Arial,sans-serif;color:#111;margin:0;background:#f3f6f8}.sheet{width:${width};min-height:${thermal ? 'auto' : '270mm'};margin:16px auto;padding:${thermal ? '5mm 3mm' : '18mm'};background:#fff}.brand{display:flex;${thermal ? 'flex-direction:column;' : ''}justify-content:space-between;gap:${thermal ? '4px' : '24px'};padding-bottom:${thermal ? '8px' : '18px'};border-bottom:${thermal ? '1px' : '3px'} solid #129cff}.brand h1{font-size:${thermal ? '20px' : '30px'};margin:0}.brand p,.muted{color:#5b6570;margin:3px 0}.document-title{display:flex;${thermal ? 'flex-direction:column;align-items:flex-start;' : 'justify-content:space-between;align-items:end;'}gap:4px;margin:${thermal ? '12px 0 8px' : '28px 0 18px'}.document-title h2{font-size:${thermal ? '16px' : '22px'};margin:0}.number{font-weight:700;color:#0877c9}.grid{display:grid;grid-template-columns:${thermal ? '1fr' : '1fr 1fr'};gap:${thermal ? '5px' : '12px'};margin:${thermal ? '9px 0' : '16px 0'}.box{border:1px solid #dbe2e8;border-radius:${thermal ? '4px' : '10px'};padding:${thermal ? '6px' : '12px'}.box small{display:block;color:#66727c;text-transform:uppercase;letter-spacing:.08em}.box strong{display:block;margin-top:2px}.content{margin:${thermal ? '10px 0' : '22px 0'}.content table{width:100%;border-collapse:collapse}.content th,.content td{padding:${thermal ? '5px 2px' : '10px 8px'};border-bottom:1px solid #dde3e8;text-align:left}.content th:last-child,.content td:last-child{text-align:right}.total{margin:${thermal ? '10px 0 0' : '20px 0 0 auto'};width:${thermal ? '100%' : '48%'};padding:${thermal ? '8px' : '14px'};border-radius:${thermal ? '4px' : '10px'};background:#edf8ff;font-size:${thermal ? '14px' : '18px'};display:flex;justify-content:space-between}.notes{margin-top:${thermal ? '10px' : '24px'};padding:${thermal ? '7px' : '14px'};border-left:${thermal ? '2px' : '4px'} solid #129cff;background:#f7fafc;white-space:pre-line}.signatures{display:grid;grid-template-columns:${thermal ? '1fr' : '1fr 1fr'};gap:${thermal ? '34px' : '50px'};margin-top:${thermal ? '35px' : '70px'};text-align:center}.signature{border-top:1px solid #222;padding-top:6px}.footer{margin-top:${thermal ? '22px' : '45px'};border-top:1px solid #dbe2e8;padding-top:8px;color:#66727c;font-size:${thermal ? '9px' : '12px'}}@media print{body{background:#fff}.sheet{margin:0;width:auto;min-height:auto;padding:${thermal ? '2mm' : '10mm'}}@page{size:${pageSize};margin:0}}</style></head><body><main class="sheet"><header class="brand"><div><h1>${esc(company.companyName || 'Cellf')}</h1><p>${esc(company.slogan || 'Reparo e Comércio')}</p></div><div><strong>${esc(company.legalName || '')}</strong><p>${esc(company.document ? `CNPJ ${company.document}` : '')}</p><p>${esc(company.phone || '')}</p></div></header><section class="document-title"><div><p class="muted">DOCUMENTO COMERCIAL</p><h2>${esc(title)}</h2></div><span class="number">Nº ${esc(number)}</span></section><section class="grid"><div class="box"><small>Cliente</small><strong>${esc(customer.name)}</strong></div><div class="box"><small>CPF / CNPJ</small><strong>${esc(customer.document || 'Não informado')}</strong></div><div class="box"><small>Emissão</small><strong>${esc(formatDateTime(issuedAt || new Date().toISOString()))}</strong></div><div class="box"><small>Telefone</small><strong>${esc(customer.phone || 'Não informado')}</strong></div></section><section class="content">${body}</section>${total ? `<div class="total"><span>Total</span><strong>${esc(total)}</strong></div>` : ''}${notes ? `<div class="notes">${esc(notes)}</div>` : ''}<section class="signatures"><div class="signature">${esc(customer.name)}</div><div class="signature">${esc(company.companyName || 'Cellf')}</div></section><footer class="footer">${esc(companyLocation)}${company.email ? ` · ${esc(company.email)}` : ''}<br>Documento emitido pelo sistema Cellf.</footer></main><script>window.addEventListener('load',()=>{window.focus();window.print();});<\/script></body></html>`);
+  popup.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(title)} ${esc(number)}</title><style>*{box-sizing:border-box}body{font:${thermal ? '11px/1.35' : '14px/1.5'} Arial,sans-serif;color:#111;margin:0;background:#f3f6f8}.sheet{width:${width};min-height:${thermal ? 'auto' : '270mm'};margin:16px auto;padding:${thermal ? '5mm 3mm' : '18mm'};background:#fff}.brand{display:flex;${thermal ? 'flex-direction:column;' : ''}justify-content:space-between;gap:${thermal ? '4px' : '24px'};padding-bottom:${thermal ? '8px' : '18px'};border-bottom:${thermal ? '1px' : '3px'} solid #129cff}.brand h1{font-size:${thermal ? '20px' : '30px'};margin:0}.brand p,.muted{color:#5b6570;margin:3px 0}.document-title{display:flex;${thermal ? 'flex-direction:column;align-items:flex-start;' : 'justify-content:space-between;align-items:end;'}gap:4px;margin:${thermal ? '12px 0 8px' : '28px 0 18px'}.document-title h2{font-size:${thermal ? '16px' : '22px'};margin:0}.number{font-weight:700;color:#0877c9}.grid{display:grid;grid-template-columns:${thermal ? '1fr' : '1fr 1fr'};gap:${thermal ? '5px' : '12px'};margin:${thermal ? '9px 0' : '16px 0'}.box{border:1px solid #dbe2e8;border-radius:${thermal ? '4px' : '10px'};padding:${thermal ? '6px' : '12px'}.box small{display:block;color:#66727c;text-transform:uppercase;letter-spacing:.08em}.box strong{display:block;margin-top:2px}.content{margin:${thermal ? '10px 0' : '22px 0'}.content table{width:100%;border-collapse:collapse}.content th,.content td{padding:${thermal ? '5px 2px' : '10px 8px'};border-bottom:1px solid #dde3e8;text-align:left}.content th:last-child,.content td:last-child{text-align:right}.total{margin:${thermal ? '10px 0 0' : '20px 0 0 auto'};width:${thermal ? '100%' : '48%'};padding:${thermal ? '8px' : '14px'};border-radius:${thermal ? '4px' : '10px'};background:#edf8ff;font-size:${thermal ? '14px' : '18px'};display:flex;justify-content:space-between}.notes{margin-top:${thermal ? '10px' : '24px'};padding:${thermal ? '7px' : '14px'};border-left:${thermal ? '2px' : '4px'} solid #129cff;background:#f7fafc;white-space:pre-line}.signatures{display:grid;grid-template-columns:${thermal ? '1fr' : '1fr 1fr'};gap:${thermal ? '34px' : '50px'};margin-top:${thermal ? '35px' : '70px'};text-align:center}.signature{border-top:1px solid #222;padding-top:6px}.footer{margin-top:${thermal ? '22px' : '45px'};border-top:1px solid #dbe2e8;padding-top:8px;color:#66727c;font-size:${thermal ? '9px' : '12px'}}@media print{body{background:#fff}.sheet{margin:0;width:auto;min-height:auto;padding:${thermal ? '2mm' : '10mm'}}@page{size:${pageSize};margin:0}}</style></head><body><main class="sheet"><header class="brand"><div><img src="${location.origin}/cellf-logo-brand.svg" alt="CELLF" style="width:${thermal ? '130px' : '190px'};max-width:100%;height:auto"><h1>${esc(company.companyName || 'Cellf')}</h1><p>${esc(company.slogan || 'Reparo e Comércio')}</p></div><div><strong>${esc(company.legalName || '')}</strong><p>${esc(company.document ? `CNPJ ${company.document}` : '')}</p><p>${esc(company.phone || '')}</p></div></header><section class="document-title"><div><p class="muted">DOCUMENTO COMERCIAL</p><h2>${esc(title)}</h2></div><span class="number">Nº ${esc(number)}</span></section><section class="grid"><div class="box"><small>Cliente</small><strong>${esc(customer.name)}</strong></div><div class="box"><small>CPF / CNPJ</small><strong>${esc(customer.document || 'Não informado')}</strong></div><div class="box"><small>Emissão</small><strong>${esc(formatDateTime(issuedAt || new Date().toISOString()))}</strong></div><div class="box"><small>Telefone</small><strong>${esc(customer.phone || 'Não informado')}</strong></div></section><section class="content">${body}</section>${total ? `<div class="total"><span>Total</span><strong>${esc(total)}</strong></div>` : ''}${notes ? `<div class="notes">${esc(notes)}</div>` : ''}<section class="signatures"><div class="signature">${esc(customer.name)}</div><div class="signature">${esc(company.companyName || 'Cellf')}</div></section><footer class="footer">${esc(companyLocation)}${company.email ? ` · ${esc(company.email)}` : ''}<br>Documento emitido pelo sistema Cellf.</footer></main><script>window.addEventListener('load',()=>{window.focus();window.print();});<\/script></body></html>`);
   popup.document.close();
   return true;
 }
@@ -1091,7 +1117,7 @@ function printSaleDocument(sale, type) {
   const customer = requireDocumentCustomer(sale);
   if (!customer) return;
   const number = sale.id.toUpperCase();
-  const items = `<table><thead><tr><th>Item</th><th>Qtd.</th><th>Valor</th></tr></thead><tbody>${sale.items.map(item => `<tr><td>${esc(item.name)}</td><td>${Number(item.quantity)}</td><td>${esc(brl.format(item.quantity * item.unitPrice))}</td></tr>`).join('')}</tbody></table>`;
+  const items = `<table><thead><tr><th>Item</th><th>Qtd.</th><th>Valor</th></tr></thead><tbody>${sale.items.map(item => `<tr><td>${esc(item.name)}</td><td>${Number(item.quantity)}</td><td>${esc(brl.format(item.quantity * item.unitPrice))}</td></tr>`).join('')}${sale.servicePayment ? `<tr><td>Serviço ${esc(sale.servicePayment.orderId)}</td><td>1</td><td>${esc(brl.format(sale.servicePayment.amount))}</td></tr>` : ''}</tbody></table>`;
   let payload;
   if (type === 'recibo') payload = { title: 'Recibo', number: `REC-${number}`, customer, issuedAt: new Date().toISOString(), body: `<p>Recebemos de <strong>${esc(customer.name)}</strong>, CPF/CNPJ ${esc(customer.document)}, o valor referente à venda ${esc(number)}, pago por ${esc(paymentLabel(sale))}.</p>${items}`, total: brl.format(sale.total), notes: 'Este recibo comprova o recebimento do valor indicado.' };
   else if (type === 'garantia') {
@@ -1106,16 +1132,18 @@ function printSaleDocument(sale, type) {
 
 function printOrderDocument(order, type, paper = 'a4') {
   if (!order) return;
+  const amountReceived = cellfExtensions?.received(order) ?? Number(order.value || 0);
+  if (type === 'recibo' && amountReceived <= 0) return toast('Registre o recebimento no Caixa antes de emitir o recibo.', 'error');
   const commercialType = ['orcamento', 'ordem', 'etiqueta'].includes(type);
   const customer = commercialType ? transactionCustomer(order) : requireDocumentCustomer(order);
   if (!customer) return;
   const service = serviceName(order.serviceId);
   const days = Number(order.warrantyDays ?? state.settings.warrantyDays ?? 0);
   const warrantyStart = order.deliveredAt || new Date().toISOString();
-  const checked = DEVICE_CHECKLIST.filter(([key]) => order.checklist?.[key]).map(([, label]) => label);
+  const checked = DEVICE_CHECKLIST.map(([key, label]) => `${label}: ${checklistStatus(order.checklist?.[key])}`);
   const parts = orderParts(order);
   const partsTable = parts.length ? `<table><thead><tr><th>Peça / produto</th><th>Qtd.</th></tr></thead><tbody>${parts.map(part => `<tr><td>${esc(part.name)}</td><td>${Number(part.quantity || 0)}</td></tr>`).join('')}</tbody></table>` : '';
-  const facts = `<div class="grid"><div class="box"><small>Aparelho</small><strong>${esc(order.device)}</strong></div><div class="box"><small>IMEI</small><strong>${esc(order.imei || 'Não informado')}</strong></div><div class="box"><small>Serviço</small><strong>${esc(service)}</strong></div><div class="box"><small>Ordem de serviço</small><strong>${esc(order.id)}</strong></div></div><p><strong>Defeito relatado:</strong> ${esc(order.issue)}</p>${order.technicalDescription ? `<p><strong>Descrição técnica:</strong> ${esc(order.technicalDescription)}</p>` : ''}${order.deviceCondition ? `<p><strong>Estado na entrada:</strong> ${esc(order.deviceCondition)}</p>` : ''}${order.accessories ? `<p><strong>Acessórios recebidos:</strong> ${esc(order.accessories)}</p>` : ''}${checked.length ? `<p><strong>Itens testados e funcionando:</strong> ${esc(checked.join(', '))}</p>` : ''}${partsTable}`;
+  const facts = `<div class="grid"><div class="box"><small>Aparelho</small><strong>${esc(order.device)}</strong></div><div class="box"><small>IMEI</small><strong>${esc(order.imei || 'Não informado')}</strong></div><div class="box"><small>Serviço</small><strong>${esc(service)}</strong></div><div class="box"><small>Ordem de serviço</small><strong>${esc(order.id)}</strong></div></div><p><strong>Defeito relatado:</strong> ${esc(order.issue)}</p>${order.technicalDescription ? `<p><strong>Descrição técnica:</strong> ${esc(order.technicalDescription)}</p>` : ''}${order.deviceCondition ? `<p><strong>Estado na entrada:</strong> ${esc(order.deviceCondition)}</p>` : ''}${order.accessories ? `<p><strong>Acessórios recebidos:</strong> ${esc(order.accessories)}</p>` : ''}${checked.length ? `<p><strong>Checklist de recebimento:</strong> ${esc(checked.join(', '))}</p>` : ''}${partsTable}`;
   let payload;
   if (type === 'orcamento') payload = { title: 'Orçamento de serviço', number: `ORC-${order.id}`, customer, issuedAt: new Date().toISOString(), body: `${facts}<div class="grid"><div class="box"><small>Aprovação</small><strong>${esc(QUOTE_STATUS_LABELS[order.quoteStatus] || QUOTE_STATUS_LABELS.pending)}</strong></div><div class="box"><small>Previsão</small><strong>${esc(formatDate(order.dueAt))}</strong></div></div>`, total: order.value == null ? 'A consultar' : brl.format(order.value), notes: `Orçamento sujeito à aprovação do cliente. Garantia prevista: ${days} dias.` };
   else if (type === 'ordem') payload = { title: 'Ordem de serviço', number: order.id, customer, issuedAt: order.createdAt, body: `${facts}<div class="grid"><div class="box"><small>Status da ordem</small><strong>${esc(statusLabel(order.status))}</strong></div><div class="box"><small>Status do orçamento</small><strong>${esc(QUOTE_STATUS_LABELS[order.quoteStatus] || QUOTE_STATUS_LABELS.pending)}</strong></div></div>`, total: order.value == null ? '' : brl.format(order.value), notes: order.warrantyNotes || state.settings.orderNotes || '' };
@@ -1123,6 +1151,11 @@ function printOrderDocument(order, type, paper = 'a4') {
   else payload = type === 'garantia'
     ? { title: 'Termo de garantia de serviço', number: `GAR-${order.id}`, customer, issuedAt: new Date().toISOString(), body: `${facts}<div class="grid"><div class="box"><small>Início da garantia</small><strong>${esc(formatDate(warrantyStart))}</strong></div><div class="box"><small>Validade</small><strong>${esc(formatDate(datePlusDays(warrantyStart, days)))}</strong></div></div>`, notes: order.warrantyNotes || state.settings.orderNotes || `Garantia de ${days} dias.` }
     : { title: 'Recibo de serviço', number: `REC-${order.id}`, customer, issuedAt: new Date().toISOString(), body: `<p>Recebemos de <strong>${esc(customer.name)}</strong>, CPF/CNPJ ${esc(customer.document)}, o valor referente ao serviço abaixo.</p>${facts}`, total: brl.format(Number(order.value || 0)), notes: 'Este recibo comprova o recebimento do valor indicado.' };
+  if (cellfExtensions) payload.body += cellfExtensions.signatureMarkup(order);
+  if (type === 'recibo') {
+    payload.total = brl.format(amountReceived);
+    payload.notes = `Recebimentos registrados até a emissão. Saldo do serviço: ${brl.format(Math.max(0, Number(order.value || 0) - amountReceived))}. Este documento não é uma nota fiscal.`;
+  }
   if (openPrintableDocument({ ...payload, paper: payload.paper || paper })) {
     const labels = { garantia: 'Garantia de serviço', recibo: 'Recibo de serviço', orcamento: 'Orçamento de serviço', ordem: 'Ordem de serviço', etiqueta: 'Etiqueta de bancada' };
     registerDocumentIssue(labels[type] || 'Documento de serviço', order.id, customer);
@@ -1245,7 +1278,8 @@ function inclusiveDaySpan(values = []) {
 }
 
 function reportData() {
-  const sales = state.sales.filter(sale => sale.status === 'paid' && withinPeriod(sale.createdAt));
+  // The OS already contributes service revenue; a combined checkout must not count it twice.
+  const sales = state.sales.filter(sale => sale.status === 'paid' && withinPeriod(sale.createdAt)).map(sale=>({...sale,total:Number(sale.total)-Number(sale.servicePayment?.amount || 0)}));
   const orders = state.orders.filter(order => withinPeriod(order.createdAt));
   const delivered = state.orders.filter(order => order.status === 'delivered' && withinPeriod(order.deliveredAt || order.createdAt));
   const paidPayables = state.payables.filter(payable => payable.paid && withinPeriod(payable.paidAt || payable.dueAt));
@@ -1283,7 +1317,7 @@ function reportData() {
 function renderReports() {
   const data = reportData();
   const periodLabel = reportPeriod ? `Últimos ${reportPeriod} dias` : 'Todo o histórico';
-  const openReceivables = state.orders.filter(order => !['delivered', 'cancelled'].includes(order.status) && order.value != null);
+  const openReceivables = state.orders.filter(order => order.status !== 'cancelled' && order.value != null).map(order=>({...order,value:Math.max(0,Number(order.value)-(cellfExtensions?.received(order) ?? (order.status==='delivered'?Number(order.value):0)))})).filter(order=>order.value>0);
   const margin = data.revenue ? Math.round((data.grossProfit / data.revenue) * 100) : 0;
   const chartDays = reportPeriod && reportPeriod <= 7 ? 7 : 14;
   const buckets = Array.from({ length: chartDays }, (_, index) => {
@@ -1620,10 +1654,13 @@ function toggleMenu() {
 }
 
 function navigate(view) {
-  const renderers = { dashboard: renderDashboard, orders: renderOrders, customers: renderCustomers, products: renderProducts, services: renderServices, sales: renderSales, payables: renderPayables, reports: renderReports, settings: renderSettings, agenda: renderAgenda, deliveries: renderDeliveries };
+  const renderers = { dashboard: renderDashboard, orders: renderOrders, customers: renderCustomers, products: renderProducts, services: renderServices, sales: renderSales, payables: renderPayables, reports: renderReports, settings: renderSettings, agenda: renderAgenda, deliveries: renderDeliveries, ...(typeof cellfExtraViews === 'object' ? cellfExtraViews : {}) };
+  if (!canAccess(view)) view = Object.keys(renderers).find(key => canAccess(key));
+  if (!view) { content.innerHTML = emptyState('Acesso sem módulos liberados', 'Peça ao administrador para habilitar os módulos do seu usuário.'); return; }
   currentView = renderers[view] ? view : 'dashboard';
   const labels = { dashboard: 'Visão geral', orders: 'Ordens de serviço', customers: 'Clientes', products: 'Produtos e estoque', services: 'Serviços e reparos', sales: 'Vendas e caixa', payables: 'Contas a pagar', reports: 'Relatórios e resultados', settings: 'Configurações', agenda: 'Agenda', deliveries: 'Entregas e busca e leva' };
   document.querySelectorAll('.nav-item').forEach(button => {
+    button.hidden = !canAccess(button.dataset.view);
     const active = button.dataset.view === currentView;
     button.classList.toggle('active', active);
     if (active) button.setAttribute('aria-current', 'page');
@@ -1635,8 +1672,10 @@ function navigate(view) {
   if (context) context.textContent = labels[currentView];
   closeMenu();
   renderers[currentView]();
+  document.body.classList.toggle('restricted-financial', !currentAccess.financial);
   associateFormLabels(content);
   window.scrollTo({ top: 0, behavior: 'smooth' });
+  cellfExtensions?.onRender(currentView);
 }
 
 function openModal(title, eyebrow, body) {
@@ -1647,6 +1686,7 @@ function openModal(title, eyebrow, body) {
   associateFormLabels(document.querySelector('#modal-body'));
   document.querySelector('#modal-backdrop').hidden = false;
   document.body.classList.add('modal-open');
+  cellfExtensions?.onModal(title, eyebrow);
   setTimeout(() => document.querySelector('#modal-body input:not([type="hidden"]), #modal-body select, #modal-body button')?.focus(), 30);
 }
 function closeModal() {
@@ -1665,6 +1705,7 @@ function customerModal(customer = {}) {
     event.target.removeAttribute('aria-invalid');
     event.target.setCustomValidity('');
   });
+  document.querySelector('#customer-form .form-actions').insertAdjacentHTML('beforebegin', `<label class="field"><span>Data de nascimento (opcional)</span><input name="birthday" type="date" max="${isoToday()}" value="${esc(customer.birthday || '')}"></label><label class="checkbox-field full"><input name="marketingConsent" type="checkbox" ${customer.marketingConsent?'checked':''}> Cliente autorizou contato promocional por WhatsApp</label>`);
   document.querySelector('#customer-form').addEventListener('submit', event => {
     event.preventDefault();
     const form = new FormData(event.target);
@@ -1682,7 +1723,7 @@ function customerModal(customer = {}) {
     }
     const duplicateDocument = customerDocument && state.customers.find(entry => entry.id !== customer.id && String(entry.document || '').replace(/\D/g, '') === customerDocument.replace(/\D/g, ''));
     if (duplicateDocument) return toast(`Este CPF/CNPJ já pertence a ${duplicateDocument.name}.`, 'error');
-    const record = { id: customer.id || uid('c'), name: data.name.trim(), phone: data.phone.trim(), document: customerDocument, email: data.email.trim(), notes: data.notes.trim(), active: customer.id ? form.has('active') : true, createdAt: customer.createdAt || isoToday() };
+    const record = { id: customer.id || uid('c'), name: data.name.trim(), phone: data.phone.trim(), document: customerDocument, email: data.email.trim(), notes: data.notes.trim(), birthday: data.birthday || '', marketingConsent: form.has('marketingConsent'), active: customer.id ? form.has('active') : true, createdAt: customer.createdAt || isoToday() };
     if (customer.id) {
       state.customers = state.customers.map(entry => entry.id === customer.id ? record : entry);
       state.orders.filter(order => order.customerId === customer.id).forEach(order => { order.customer = record.name; order.phone = record.phone; });
@@ -1702,9 +1743,10 @@ function viewCustomer(customer) {
   if (!customer) return;
   const orders = customerOrders(customer);
   const sales = customerSales(customer);
-  const total = sum(orders.filter(order => order.status !== 'cancelled'), 'value') + sum(sales.filter(sale => sale.status === 'paid'), 'total');
+  const total = sum(orders.filter(order => order.status !== 'cancelled'), 'value') + productSalesRevenue(sales.filter(sale => sale.status === 'paid'));
   const digits = String(customer.phone || '').replace(/\D/g, '');
-  openModal(customer.name, 'FICHA DO CLIENTE', `<div class="customer-detail"><div class="customer-profile"><span class="customer-avatar avatar">${esc(initials(customer.name))}</span><div><strong>${esc(customer.name)}</strong><small>Cliente desde ${formatDate(customer.createdAt)}</small></div>${customer.active === false ? '<span class="status waiting">Inativo</span>' : '<span class="status ready">Ativo</span>'}</div><div class="detail-grid"><div class="field"><label>TELEFONE</label><strong>${esc(customer.phone || 'Não informado')}</strong></div><div class="field"><label>E-MAIL</label><strong>${esc(customer.email || 'Não informado')}</strong></div><div class="field"><label>CPF / CNPJ</label><strong>${esc(customer.document || 'Não informado')}</strong></div><div class="field"><label>TOTAL MOVIMENTADO</label><strong>${brl.format(total)}</strong></div></div>${customer.notes ? `<div class="detail-section"><h3>Observações</h3><p>${esc(customer.notes)}</p></div>` : ''}<div class="detail-section"><h3>Últimos atendimentos</h3>${orders.length ? `<div class="activity-list">${orders.slice(0, 5).map(order => `<button class="activity-item" data-action="view-order" data-id="${esc(order.id)}"><span><strong>${esc(order.device)}</strong><small>${esc(order.id)} · ${esc(ATTENDANCE_LABELS[order.attendanceType] || ATTENDANCE_LABELS.in_store_service)}</small></span><span class="status ${statusMap[order.status]?.[1] || 'waiting'}">${esc(statusLabel(order.status))}</span></button>`).join('')}</div>` : '<p>Este cliente ainda não possui ordens de serviço.</p>'}</div><div class="form-actions">${digits ? `<a class="ghost-button" href="https://wa.me/55${esc(digits)}" target="_blank" rel="noopener noreferrer">WhatsApp ↗</a>` : ''}<button class="primary-button" data-action="edit-customer" data-id="${esc(customer.id)}">Editar cliente</button></div></div>`);
+  openModal(customer.name, 'FICHA DO CLIENTE', `<div class="customer-detail"><div class="customer-profile"><span class="customer-avatar avatar">${esc(initials(customer.name))}</span><div><strong>${esc(customer.name)}</strong><small>Cliente desde ${formatDate(customer.createdAt)}</small></div>${customer.active === false ? '<span class="status waiting">Inativo</span>' : '<span class="status ready">Ativo</span>'}</div><div class="detail-grid"><div class="field"><label>TELEFONE</label><strong>${esc(customer.phone || 'Não informado')}</strong></div><div class="field"><label>E-MAIL</label><strong>${esc(customer.email || 'Não informado')}</strong></div><div class="field"><label>CPF / CNPJ</label><strong>${esc(customer.document || 'Não informado')}</strong></div><div class="field"><label>TOTAL MOVIMENTADO</label><strong>${brl.format(total)}</strong></div></div>${customer.notes ? `<div class="detail-section"><h3>Observações</h3><p>${esc(customer.notes)}</p></div>` : ''}<div class="detail-section"><h3>Últimos atendimentos</h3>${orders.length ? `<div class="activity-list">${orders.map(order => `<button class="activity-item" data-action="view-order" data-id="${esc(order.id)}"><span><strong>${esc(order.device)}</strong><small>${esc(order.id)} · ${esc(ATTENDANCE_LABELS[order.attendanceType] || ATTENDANCE_LABELS.in_store_service)}</small></span><span class="status ${statusMap[order.status]?.[1] || 'waiting'}">${esc(statusLabel(order.status))}</span></button>`).join('')}</div>` : '<p>Este cliente ainda não possui ordens de serviço.</p>'}</div><div class="form-actions">${digits ? `<a class="ghost-button" href="https://wa.me/55${esc(digits)}" target="_blank" rel="noopener noreferrer">WhatsApp ↗</a>` : ''}<button class="primary-button" data-action="edit-customer" data-id="${esc(customer.id)}">Editar cliente</button></div></div>`);
+  cellfExtensions?.decorateCustomer(customer);
 }
 
 function productModal(product = {}) {
@@ -1759,7 +1801,7 @@ function orderModal(order = {}) {
   const pickupReturn = order.attendanceType === 'pickup_return';
   const anonymousOrder = normalize(order.customer) === normalize(ANONYMOUS_CUSTOMER);
   const checklist = order.checklist && typeof order.checklist === 'object' ? order.checklist : {};
-  const checklistMarkup = DEVICE_CHECKLIST.map(([key, label]) => `<label class="checklist-item"><input type="checkbox" name="checklist-${key}" ${checklist[key] ? 'checked' : ''}><span>${esc(label)}</span></label>`).join('');
+  const checklistMarkup = DEVICE_CHECKLIST.map(([key, label]) => `<label class="checklist-item"><span>${esc(label)}</span><select name="checklist-${key}">${[['untested','Não testado'],['ok','OK'],['attention','Atenção']].map(([value,text]) => `<option value="${value}" ${checklistStatus(checklist[key]) === text ? 'selected' : ''}>${text}</option>`).join('')}</select></label>`).join('');
   const existingParts = orderParts(order);
   const partsMarkup = state.products.map(product => {
     const selected = existingParts.find(part => part.productId === product.id);
@@ -1768,6 +1810,7 @@ function orderModal(order = {}) {
   }).join('');
   openModal(order.id ? `Editar ${order.id}` : 'Nova ordem de serviço', 'ASSISTÊNCIA TÉCNICA', `<form id="order-form" class="form-grid"><div class="field full"><label>CLIENTE CADASTRADO</label><select name="customerId" id="order-customer"><option value="">Cadastrar a partir dos dados abaixo</option>${customers.map(customer => `<option value="${esc(customer.id)}" data-name="${esc(customer.name)}" data-phone="${esc(customer.phone)}" ${order.customerId === customer.id ? 'selected' : ''}>${esc(customer.name)} · ${esc(customer.phone || 'sem telefone')}</option>`).join('')}</select></div><div class="field"><label>NOME DO CLIENTE *</label><input name="customer" id="order-customer-name" required value="${esc(order.customer)}" placeholder="Nome completo"></div><div class="field"><label>TELEFONE${anonymousOrder ? '' : ' *'}</label><input name="phone" id="order-customer-phone" ${anonymousOrder ? '' : 'required'} value="${esc(order.phone)}" placeholder="(11) 99999-9999"></div><div class="field full"><label>TIPO DE ATENDIMENTO *</label><select name="attendanceType" id="order-attendance-type"><option value="in_store_service" ${!pickupReturn ? 'selected' : ''}>${ATTENDANCE_LABELS.in_store_service}</option><option value="pickup_return" ${pickupReturn ? 'selected' : ''}>${ATTENDANCE_LABELS.pickup_return}</option></select></div><section class="field full fulfillment-address-fields" id="order-address-section" ${pickupReturn ? '' : 'hidden'}><div class="form-section address-form-heading"><h3>Endereço desta ordem de serviço</h3><p>A busca e a devolução usarão o endereço informado apenas nesta ordem.</p></div><div class="form-grid">${addressFieldsMarkup(selectedAddress)}</div></section><div class="field"><label>APARELHO *</label><input name="device" required value="${esc(order.device)}" placeholder="Ex.: iPhone 13 Pro"></div><div class="field"><label>IMEI</label><input name="imei" inputmode="numeric" maxlength="15" value="${esc(order.imei)}" placeholder="15 dígitos"></div><div class="field full"><label>DEFEITO RELATADO *</label><textarea name="issue" required placeholder="Descreva o problema informado pelo cliente...">${esc(order.issue)}</textarea></div><div class="field"><label>ESTADO DO APARELHO NA ENTRADA</label><textarea name="deviceCondition" placeholder="Ex.: riscos na lateral, tela trincada...">${esc(order.deviceCondition || '')}</textarea></div><div class="field"><label>ACESSÓRIOS RECEBIDOS</label><textarea name="accessories" placeholder="Ex.: capa, chip e carregador">${esc(order.accessories || '')}</textarea></div><section class="field full device-checklist"><div class="form-section"><h3>Checklist de entrada</h3><p>Marque somente o que foi testado e está funcionando.</p></div><div class="checklist-grid">${checklistMarkup}</div></section><div class="form-section"><h3>Serviço, orçamento e prazo</h3></div><div class="field full"><label>SERVIÇO *</label><select name="serviceId" id="order-service" required><option value="">Selecione...</option>${state.services.filter(service => service.active || service.id === order.serviceId).map(service => `<option value="${esc(service.id)}" data-price="${service.price ?? ''}" data-description="${esc(service.description || '')}" data-warranty="${Number(service.warrantyDays ?? state.settings.warrantyDays ?? 0)}" ${order.serviceId === service.id ? 'selected' : ''}>${esc(service.name)} — ${service.pricing === 'fixed' ? brl.format(service.price) : 'A consultar'}</option>`).join('')}</select></div><div class="field full"><label>DESCRIÇÃO TÉCNICA</label><textarea name="technicalDescription" id="order-technical-description" placeholder="Diagnóstico, peças e serviço a executar...">${esc(order.technicalDescription || '')}</textarea></div><section class="field full order-parts"><div class="form-section"><h3>Peças e produtos utilizados</h3><p>O estoque é reservado quando o orçamento é aprovado.</p></div><div class="order-parts-list">${partsMarkup || '<p class="field-help">Cadastre produtos e peças para vinculá-los à ordem.</p>'}</div></section><div class="field"><label>VALOR DO ORÇAMENTO (R$)</label><input name="value" id="order-value" type="number" min="0" step="0.01" value="${order.value ?? ''}" placeholder="Deixe vazio se a consultar"></div><div class="field"><label>APROVAÇÃO DO ORÇAMENTO</label><select name="quoteStatus">${Object.entries(QUOTE_STATUS_LABELS).map(([value, label]) => `<option value="${value}" ${(order.quoteStatus || 'pending') === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div><div class="field"><label>FORMA DE PAGAMENTO</label><select name="payment"><option value="">A definir</option>${Object.entries(PAYMENT_LABELS).map(([value, label]) => `<option value="${value}" ${order.payment === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div><div class="field"><label>GARANTIA (DIAS)</label><input name="warrantyDays" id="order-warranty-days" type="number" min="0" max="3650" value="${Number(order.warrantyDays ?? state.settings.warrantyDays ?? 0)}"></div><div class="field"><label>PREVISÃO DE ENTREGA *</label><input name="dueAt" type="date" required value="${esc(order.dueAt || defaultDue)}"></div>${order.id ? `<div class="field"><label>STATUS DA ORDEM</label><select name="status">${Object.entries(statusMap).map(([value, [label]]) => `<option value="${value}" ${order.status === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div>` : ''}<div class="form-section"><h3>Lembrete opcional</h3></div><div class="field full"><label>LEMBRETE</label><input name="reminder" value="${esc(order.reminder)}" placeholder="Ex.: Avisar o cliente quando a peça chegar"></div><div class="field full"><label>DATA E HORA DO LEMBRETE</label><input name="reminderAt" type="datetime-local" value="${esc(order.reminderAt)}"></div>${formActions(order.id ? 'Salvar alterações' : 'Criar ordem')}</form>`);
   const form = document.querySelector('#order-form');
+  form.querySelector('.device-checklist p').textContent = 'Registre o resultado de cada teste na presença do cliente.';
   const attendanceSelect = document.querySelector('#order-attendance-type');
   const toggleAddress = () => {
     const required = attendanceSelect.value === 'pickup_return';
@@ -1833,8 +1876,10 @@ function orderModal(order = {}) {
     const selectedService = state.services.find(service => service.id === data.serviceId);
     const serviceBaseCost = selectedService?.cost == null ? null : Number(selectedService.cost);
     const serviceCost = serviceBaseCost == null && !parts.length ? null : Number(serviceBaseCost || 0) + orderPartsCost(parts);
-    const checklistValues = Object.fromEntries(DEVICE_CHECKLIST.map(([key]) => [key, formData.has(`checklist-${key}`)]));
+    const checklistValues = Object.fromEntries(DEVICE_CHECKLIST.map(([key]) => [key, ['ok','attention'].includes(formData.get(`checklist-${key}`)) ? formData.get(`checklist-${key}`) : 'untested']));
     const record = { id: order.id || `OS-${next}`, customerId: customer?.id || '', customer: data.customer.trim(), customerDocument: formatCpfCnpj(order.customerDocument || customer?.document || ''), phone: data.phone.trim(), attendanceType: needsAddress ? 'pickup_return' : 'in_store_service', deliveryAddress: address ? { ...address } : null, device: data.device.trim(), imei, issue: data.issue.trim(), deviceCondition: String(data.deviceCondition || '').trim(), accessories: String(data.accessories || '').trim(), checklist: checklistValues, photos: Array.isArray(order.photos) ? order.photos : [], parts, partsReserved: shouldReserveParts, serviceId: data.serviceId, serviceBaseCost, serviceCost, technicalDescription: String(data.technicalDescription || '').trim(), value: data.value === '' ? null : Number(data.value), quoteStatus, quoteDecidedAt: quoteStatus === 'pending' ? '' : order.quoteStatus === quoteStatus && order.quoteDecidedAt ? order.quoteDecidedAt : new Date().toISOString(), payment: data.payment || '', paymentDetails: data.payment ? PAYMENT_LABELS[data.payment] : '', status, createdAt: order.createdAt || isoToday(), dueAt: data.dueAt, reminderAt: data.reminderAt, reminder: data.reminder.trim(), deliveredAt: status === 'delivered' ? order.deliveredAt || new Date().toISOString() : '', warrantyDays: Number(data.warrantyDays || 0), warrantyNotes: order.warrantyNotes || state.settings.orderNotes || '' };
+    record.signature = order.signature || null;
+    record.receiptsTracked = order.receiptsTracked ?? (order.id ? false : true);
     if (order.id) state.orders = state.orders.map(item => item.id === order.id ? record : item);
     else state.orders.unshift(record);
     syncRepairDeliveries(record, customer || { id: '', name: record.customer, phone: record.phone }, address);
@@ -1897,11 +1942,11 @@ function viewOrder(order) {
   if (!order) return;
   const service = serviceName(order.serviceId);
   const customer = transactionCustomer(order);
-  const checked = DEVICE_CHECKLIST.filter(([key]) => order.checklist?.[key]).map(([, label]) => label);
+  const checked = DEVICE_CHECKLIST.map(([key,label]) => `${label}: ${checklistStatus(order.checklist?.[key])}`);
   const photos = Array.isArray(order.photos) ? order.photos : [];
   const parts = orderParts(order);
   const whatsappActions = orderWhatsappUrl(order, 'status') ? `<section class="detail-section whatsapp-center"><h3>Mensagens rápidas</h3><div class="whatsapp-actions"><a class="ghost-button" href="${esc(orderWhatsappUrl(order, 'quote'))}" target="_blank" rel="noopener noreferrer">Enviar orçamento ↗</a><a class="ghost-button" href="${esc(orderWhatsappUrl(order, 'status'))}" target="_blank" rel="noopener noreferrer">Atualizar status ↗</a><a class="ghost-button" href="${esc(orderWhatsappUrl(order, 'ready'))}" target="_blank" rel="noopener noreferrer">Avisar que está pronto ↗</a>${order.status === 'delivered' ? `<a class="ghost-button" href="${esc(orderWhatsappUrl(order, 'review'))}" target="_blank" rel="noopener noreferrer">Pós-venda e avaliação ↗</a>` : ''}</div></section>` : '';
-  openModal(order.id, 'DETALHES DA ORDEM', `<div class="order-detail"><div class="order-detail-header"><div><div class="order-detail-badges"><span class="status ${statusMap[order.status]?.[1] || 'waiting'}">${esc(statusLabel(order.status))}</span><span class="quote-pill quote-${esc(order.quoteStatus || 'pending')}">${esc(QUOTE_STATUS_LABELS[order.quoteStatus] || QUOTE_STATUS_LABELS.pending)}</span></div><h3>${esc(order.device)}</h3><p>${esc(order.issue)}</p></div><strong class="order-detail-value">${order.value == null ? 'A consultar' : brl.format(order.value)}</strong></div><div class="detail-grid"><div class="field"><label>CLIENTE</label><strong>${esc(order.customer)}</strong><span class="field-help">${esc(order.phone || 'Sem telefone')}</span></div><div class="field"><label>CPF / CNPJ</label><strong>${esc(customer.document || 'Não informado')}</strong></div><div class="field"><label>ATENDIMENTO</label><strong>${esc(ATTENDANCE_LABELS[order.attendanceType] || ATTENDANCE_LABELS.in_store_service)}</strong></div><div class="field"><label>PAGAMENTO</label><strong>${esc(order.paymentDetails || PAYMENT_LABELS[order.payment] || 'Não informado')}</strong></div><div class="field"><label>IMEI</label><strong>${esc(order.imei || 'Não informado')}</strong></div><div class="field"><label>SERVIÇO</label><strong>${esc(service)}</strong></div><div class="field"><label>PREVISÃO DE ENTREGA</label><strong>${formatDate(order.dueAt)}</strong></div><div class="field"><label>ENTRADA</label><strong>${formatDate(order.createdAt)}</strong></div><div class="field"><label>GARANTIA</label><strong>${Number(order.warrantyDays ?? state.settings.warrantyDays ?? 0)} dias</strong></div></div>${order.technicalDescription || order.deviceCondition || order.accessories || checked.length ? `<section class="detail-section inspection-summary"><h3>Diagnóstico e checklist</h3>${order.technicalDescription ? `<p><strong>Descrição técnica:</strong> ${esc(order.technicalDescription)}</p>` : ''}${order.deviceCondition ? `<p><strong>Estado na entrada:</strong> ${esc(order.deviceCondition)}</p>` : ''}${order.accessories ? `<p><strong>Acessórios:</strong> ${esc(order.accessories)}</p>` : ''}${checked.length ? `<div class="checklist-readonly">${checked.map(label => `<span>✓ ${esc(label)}</span>`).join('')}</div>` : ''}</section>` : ''}${parts.length ? `<section class="detail-section order-parts-summary"><h3>Peças e produtos</h3>${parts.map(part => `<div><span>${Number(part.quantity || 0)} × ${esc(part.name)}</span><strong>${brl.format(Number(part.cost || 0) * Number(part.quantity || 0))}</strong></div>`).join('')}<div class="parts-cost-total"><span>Custo total das peças</span><strong>${brl.format(orderPartsCost(parts))}</strong></div></section>` : ''}${order.deliveryAddress ? `<div class="detail-section address-detail-section"><h3>Endereço de busca e devolução</h3><p>${esc(formatAddress(order.deliveryAddress))}</p>${order.deliveryAddress.reference ? `<small>Referência: ${esc(order.deliveryAddress.reference)}</small>` : ''}</div>` : ''}<section class="detail-section order-photos"><div class="section-heading-inline"><h3>Fotos e evidências</h3><button class="text-button" data-action="add-order-photo" data-id="${esc(order.id)}">＋ Adicionar foto</button></div>${photos.length ? `<div class="photo-evidence-list">${photos.map(photo => `<article><span aria-hidden="true">▧</span><div><strong>${esc(photo.caption || photo.filename)}</strong><small>${esc(photo.filename)} · ${formatDate(photo.createdAt)}</small></div><button class="icon-button" data-action="open-order-photo" data-id="${esc(order.id)}" data-photo-id="${esc(photo.id)}" aria-label="Abrir foto">↗</button><button class="icon-button document-remove" data-action="remove-order-photo" data-id="${esc(order.id)}" data-photo-id="${esc(photo.id)}" aria-label="Remover foto">×</button></article>`).join('')}</div>` : '<p class="field-help">Adicione fotos da entrada, do diagnóstico e da entrega para documentar o estado do aparelho.</p>'}</section>${whatsappActions}${order.reminder ? `<div class="detail-section reminder-callout"><h3>Lembrete</h3><p>${esc(order.reminder)}</p><small>${formatDateTime(order.reminderAt)}</small></div>` : ''}${state.settings.orderNotes ? `<div class="detail-section"><h3>Condições e observações</h3><p>${esc(state.settings.orderNotes)}</p></div>` : ''}<section class="detail-section document-center"><h3>Documentos e impressão</h3><div class="document-action-grid"><button class="ghost-button" data-action="print-order-quote" data-id="${esc(order.id)}">Orçamento / PDF</button><button class="ghost-button" data-action="print-service-order" data-id="${esc(order.id)}">Ordem de serviço</button><button class="ghost-button" data-action="print-order-thermal" data-id="${esc(order.id)}">Comprovante 80 mm</button><button class="ghost-button" data-action="print-order-label" data-id="${esc(order.id)}">Etiqueta 58 mm</button>${order.value != null ? `<button class="ghost-button" data-action="print-order-receipt" data-id="${esc(order.id)}">Recibo</button>` : ''}<button class="ghost-button" data-action="print-order-warranty" data-id="${esc(order.id)}">Garantia</button></div></section><div class="form-actions"><button class="ghost-button" data-action="edit-order" data-id="${esc(order.id)}">Editar</button>${order.status !== 'delivered' && order.status !== 'cancelled' ? `<button class="primary-button" data-action="deliver-order" data-id="${esc(order.id)}">✓ Marcar como entregue</button>` : ''}</div></div>`);
+  openModal(order.id, 'DETALHES DA ORDEM', `<div class="order-detail"><div class="order-detail-header"><div><div class="order-detail-badges"><span class="status ${statusMap[order.status]?.[1] || 'waiting'}">${esc(statusLabel(order.status))}</span><span class="quote-pill quote-${esc(order.quoteStatus || 'pending')}">${esc(QUOTE_STATUS_LABELS[order.quoteStatus] || QUOTE_STATUS_LABELS.pending)}</span></div><h3>${esc(order.device)}</h3><p>${esc(order.issue)}</p></div><strong class="order-detail-value">${order.value == null ? 'A consultar' : brl.format(order.value)}</strong></div><div class="detail-grid"><div class="field"><label>CLIENTE</label><strong>${esc(order.customer)}</strong><span class="field-help">${esc(order.phone || 'Sem telefone')}</span></div><div class="field"><label>CPF / CNPJ</label><strong>${esc(customer.document || 'Não informado')}</strong></div><div class="field"><label>ATENDIMENTO</label><strong>${esc(ATTENDANCE_LABELS[order.attendanceType] || ATTENDANCE_LABELS.in_store_service)}</strong></div><div class="field"><label>PAGAMENTO</label><strong>${esc(order.paymentDetails || PAYMENT_LABELS[order.payment] || 'Não informado')}</strong></div><div class="field"><label>IMEI</label><strong>${esc(order.imei || 'Não informado')}</strong></div><div class="field"><label>SERVIÇO</label><strong>${esc(service)}</strong></div><div class="field"><label>PREVISÃO DE ENTREGA</label><strong>${formatDate(order.dueAt)}</strong></div><div class="field"><label>ENTRADA</label><strong>${formatDate(order.createdAt)}</strong></div><div class="field"><label>GARANTIA</label><strong>${Number(order.warrantyDays ?? state.settings.warrantyDays ?? 0)} dias</strong></div></div>${order.technicalDescription || order.deviceCondition || order.accessories || checked.length ? `<section class="detail-section inspection-summary"><h3>Diagnóstico e checklist</h3>${order.technicalDescription ? `<p><strong>Descrição técnica:</strong> ${esc(order.technicalDescription)}</p>` : ''}${order.deviceCondition ? `<p><strong>Estado na entrada:</strong> ${esc(order.deviceCondition)}</p>` : ''}${order.accessories ? `<p><strong>Acessórios:</strong> ${esc(order.accessories)}</p>` : ''}${checked.length ? `<div class="checklist-readonly">${checked.map(label => `<span>${esc(label)}</span>`).join('')}</div>` : ''}</section>` : ''}${parts.length ? `<section class="detail-section order-parts-summary"><h3>Peças e produtos</h3>${parts.map(part => `<div><span>${Number(part.quantity || 0)} × ${esc(part.name)}</span><strong>${brl.format(Number(part.cost || 0) * Number(part.quantity || 0))}</strong></div>`).join('')}<div class="parts-cost-total"><span>Custo total das peças</span><strong>${brl.format(orderPartsCost(parts))}</strong></div></section>` : ''}${order.deliveryAddress ? `<div class="detail-section address-detail-section"><h3>Endereço de busca e devolução</h3><p>${esc(formatAddress(order.deliveryAddress))}</p>${order.deliveryAddress.reference ? `<small>Referência: ${esc(order.deliveryAddress.reference)}</small>` : ''}</div>` : ''}<section class="detail-section order-photos"><div class="section-heading-inline"><h3>Fotos e evidências</h3><button class="text-button" data-action="add-order-photo" data-id="${esc(order.id)}">＋ Adicionar foto</button></div>${photos.length ? `<div class="photo-evidence-list">${photos.map(photo => `<article><span aria-hidden="true">▧</span><div><strong>${esc(photo.caption || photo.filename)}</strong><small>${esc(photo.filename)} · ${formatDate(photo.createdAt)}</small></div><button class="icon-button" data-action="open-order-photo" data-id="${esc(order.id)}" data-photo-id="${esc(photo.id)}" aria-label="Abrir foto">↗</button><button class="icon-button document-remove" data-action="remove-order-photo" data-id="${esc(order.id)}" data-photo-id="${esc(photo.id)}" aria-label="Remover foto">×</button></article>`).join('')}</div>` : '<p class="field-help">Adicione fotos da entrada, do diagnóstico e da entrega para documentar o estado do aparelho.</p>'}</section>${whatsappActions}${order.reminder ? `<div class="detail-section reminder-callout"><h3>Lembrete</h3><p>${esc(order.reminder)}</p><small>${formatDateTime(order.reminderAt)}</small></div>` : ''}${state.settings.orderNotes ? `<div class="detail-section"><h3>Condições e observações</h3><p>${esc(state.settings.orderNotes)}</p></div>` : ''}<section class="detail-section document-center"><h3>Documentos e impressão</h3><div class="document-action-grid"><button class="ghost-button" data-action="print-order-quote" data-id="${esc(order.id)}">Orçamento / PDF</button><button class="ghost-button" data-action="print-service-order" data-id="${esc(order.id)}">Ordem de serviço</button><button class="ghost-button" data-action="print-order-thermal" data-id="${esc(order.id)}">Comprovante 80 mm</button><button class="ghost-button" data-action="print-order-label" data-id="${esc(order.id)}">Etiqueta 58 mm</button>${order.value != null ? `<button class="ghost-button" data-action="print-order-receipt" data-id="${esc(order.id)}">Recibo</button>` : ''}<button class="ghost-button" data-action="print-order-warranty" data-id="${esc(order.id)}">Garantia</button></div></section><div class="form-actions"><button class="ghost-button" data-action="edit-order" data-id="${esc(order.id)}">Editar</button>${order.status !== 'delivered' && order.status !== 'cancelled' ? `<button class="primary-button" data-action="deliver-order" data-id="${esc(order.id)}">✓ Marcar como entregue</button>` : ''}</div></div>`);
 }
 
 function orderPhotoModal(order) {
@@ -2200,7 +2245,7 @@ function renderCloudAccess(mode = 'login', message = '') {
       <article><span class="cellf-service-number">03 /</span><h3>Venda balcão</h3><p>Visite a loja, conheça os produtos e faça sua compra com atendimento presencial.</p><span class="cellf-service-tag">Escolha de perto</span></article>
       <article><span class="cellf-service-number">04 /</span><h3>Serviço em loja</h3><p>Traga seu aparelho para avaliação e acompanhe as orientações para o reparo.</p><span class="cellf-service-tag">Cuidado com seu aparelho</span></article>
     </div></section>
-    <footer class="cellf-public-footer"><strong>CELLF <span>Reparo e Comércio</span></strong><p>Tecnologia que faz parte do seu dia.</p><a href="#">Voltar ao topo ↑</a></footer>
+    <footer class="cellf-public-footer"><strong>CELLF <span>Reparo e Comércio</span></strong><p>Tecnologia que faz parte do seu dia.</p><a href="/vitrine">Aparelhos disponíveis ↗</a><a href="#">Voltar ao topo ↑</a></footer>
     <dialog class="cellf-login-dialog" id="cellf-login-dialog" aria-labelledby="cloud-access-title"><button class="cellf-login-close" id="close-cellf-login" type="button" aria-label="Fechar login">×</button><section class="cloud-access-screen" aria-labelledby="cloud-access-title">
     <div class="cloud-access-card">
       <div class="cloud-brand"><img src="/cellf-logo-brand.svg" alt="Cellf — Reparo e Comércio" width="1135" height="343"></div>
@@ -2338,6 +2383,7 @@ async function authenticate(email, password) {
 async function loadRemoteState() {
   const preservePendingChanges = applicationReady && pendingStateRevision > persistedStateRevision;
   const payload = await apiRequest('/api/state');
+  currentAccess = payload.access || { admin: true, modules: [], financial: true };
   setCloudStatus('connected');
 
   if (preservePendingChanges) {
@@ -2349,9 +2395,9 @@ async function loadRemoteState() {
   persistedStateRevision = 0;
   if (payload.state && typeof payload.state === 'object' && !Array.isArray(payload.state)) {
     const requiresOperationalImport = payload.state.operationalDataVersion !== OPERATIONAL_DATA_VERSION;
-    state = loadState(payload.state, { applyOperationalImport: true });
+    state = loadState(payload.state, { applyOperationalImport: currentAccess.admin });
     cloudConnection.updatedAt = payload.updatedAt || null;
-    if (requiresOperationalImport) {
+    if (requiresOperationalImport && currentAccess.admin) {
       pendingStateRevision += 1;
       await flushStateSave();
     }
@@ -2359,6 +2405,7 @@ async function loadRemoteState() {
   }
 
   state = loadState();
+  if (!currentAccess.admin) throw new Error('O administrador precisa inicializar os dados da empresa antes do primeiro acesso da equipe.');
   pendingStateRevision += 1;
   await flushStateSave();
   return state;
@@ -2557,6 +2604,9 @@ document.addEventListener('change', event => {
   if (event.target.matches('[data-action="sale-attendance-type"]')) { cart.attendanceType = event.target.value === 'delivery' ? 'delivery' : 'counter_sale'; renderSales(); }
   if (event.target.matches('[data-action="sale-customer"]')) {
     cart.customerId = event.target.value;
+    cart.sourceOrderId = '';
+    cart.includeService = false;
+    renderSales();
     if (cart.attendanceType === 'delivery') renderSales();
   }
   if (event.target.matches('[data-action="sale-payment"]')) { cart.payment = event.target.value; renderSales(); }
@@ -2635,4 +2685,22 @@ window.addEventListener?.('beforeunload', event => {
   event.returnValue = '';
 });
 
-bootstrapApplication();
+import('./operations.js').then(({ installOperations }) => {
+  cellfExtensions = installOperations({
+    get state() { return state; }, get access() { return currentAccess; },
+    get content() { return content; },
+    esc, brl, uid, isoToday, formatDate, formatDateTime, pageHeading, emptyState, statCard,
+    openModal, closeModal, formActions, associateFormLabels, apiRequest, saveState, flushStateSave,
+    recordActivity, navigate, viewOrder, saveCompanyDocument, readCompanyDocument,
+    validateCompanyDocument, exportCsv, downloadFile, toast,
+    setPublic() { setShellAccess(false); },
+    refresh() { return loadRemoteState(); },
+    renderSales, cartServicePayment
+  });
+  cellfExtraViews = cellfExtensions.views;
+  if (location.pathname === '/vitrine') return cellfExtensions.renderShowcase();
+  return bootstrapApplication();
+}).catch(error => {
+  console.error('Falha ao iniciar os módulos CELLF', error);
+  bootstrapApplication();
+});

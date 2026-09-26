@@ -364,6 +364,7 @@ test('GET do estado consulta o identificador correto e mantém a chave apenas no
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.payload, {
     state: row.state,
+    access: { admin: true, email: 'admin@cellf.example', financial: true, modules: ['orders','customers','products','services','sales','payables','reports','agenda','deliveries','cash','devices'] },
     updatedAt: row.updated_at,
     source: 'supabase'
   });
@@ -382,7 +383,10 @@ test('GET de um projeto ainda vazio retorna estado nulo, sem erro', async contex
   await stateHandler(request('GET'), response);
 
   assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.payload, { state: null, updatedAt: null, source: 'supabase' });
+  assert.equal(response.payload.state, null);
+  assert.equal(response.payload.updatedAt, null);
+  assert.equal(response.payload.source, 'supabase');
+  assert.equal(response.payload.access.admin, true);
 });
 
 test('PUT persiste o estado por upsert atômico e retorna o horário atualizado', async context => {

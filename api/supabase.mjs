@@ -246,20 +246,21 @@ export function verifyCredentials(email, password) {
   return Boolean(emailMatches && verifyPassword(password));
 }
 
-export function issueSession(email = process.env.CELLF_ADMIN_EMAIL) {
+export function issueSession(email = process.env.CELLF_ADMIN_EMAIL, employee = null) {
   if (!isAuthConfigured()) {
     throw new ApiError(503, 'AUTH_NOT_CONFIGURED', 'O acesso seguro da Cellf ainda não foi configurado.');
   }
 
   const sessionEmail = normalizeLoginEmail(email);
-  if (!sessionEmail || !safeEqual(sessionEmail, normalizeLoginEmail(process.env.CELLF_ADMIN_EMAIL))) {
+  if (!sessionEmail || (!employee && !safeEqual(sessionEmail, normalizeLoginEmail(process.env.CELLF_ADMIN_EMAIL)))) {
     throw new ApiError(401, 'INVALID_CREDENTIALS', 'E-mail ou senha incorretos.');
   }
 
   const issuedAt = Math.floor(Date.now() / 1000);
   const expiresAt = issuedAt + SESSION_DURATION_SECONDS;
   const payload = Buffer.from(JSON.stringify({
-    sub: 'cellf-admin',
+    sub: employee?.id || 'cellf-admin',
+    ...(employee ? { version: employee.version } : {}),
     email: sessionEmail,
     iat: issuedAt,
     exp: expiresAt,
@@ -286,8 +287,7 @@ export function readSession(request) {
     const session = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
     const now = Math.floor(Date.now() / 1000);
     if (
-      session.sub !== 'cellf-admin'
-      || session.email !== normalizeLoginEmail(process.env.CELLF_ADMIN_EMAIL)
+      !(session.sub === 'cellf-admin' ? session.email === normalizeLoginEmail(process.env.CELLF_ADMIN_EMAIL) : /^[0-9a-f-]{36}$/.test(session.sub) && normalizeLoginEmail(session.email) && Number.isSafeInteger(session.version))
       || !Number.isSafeInteger(session.iat)
       || !Number.isSafeInteger(session.exp)
       || session.iat > now + 60
@@ -300,7 +300,7 @@ export function readSession(request) {
   }
 }
 
-export function requireAuthenticatedSession(request) {
+export function requireAuthenticatedSession(request, { allowEmployee = false } = {}) {
   if (!isAuthConfigured()) {
     throw new ApiError(503, 'AUTH_NOT_CONFIGURED', 'O acesso seguro da Cellf ainda não foi configurado.');
   }
@@ -308,6 +308,7 @@ export function requireAuthenticatedSession(request) {
   if (!session) {
     throw new ApiError(401, 'AUTH_REQUIRED', 'Entre com seu e-mail e senha da Cellf para acessar estes dados.');
   }
+  if (!allowEmployee && session.sub !== 'cellf-admin') throw new ApiError(403, 'ADMIN_REQUIRED', 'Esta operação exige acesso do administrador.');
   if (!['GET', 'HEAD'].includes(String(request.method || 'GET').toUpperCase())) {
     assertSameOrigin(request);
   }

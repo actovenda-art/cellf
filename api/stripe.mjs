@@ -10,8 +10,10 @@ import {
   sendJson,
   supabaseRequest
 } from './supabase.mjs';
+import { writeRecord } from './access.mjs';
 
 const STRIPE_SALE_STATUSES = new Set(['pending_payment', 'payment_failed']);
+const stateVersions = new WeakMap();
 
 function headerValue(request, name) {
   const headers = request.headers || {};
@@ -61,17 +63,14 @@ async function readAppState() {
   if (!record?.state || typeof record.state !== 'object' || Array.isArray(record.state)) {
     throw new ApiError(409, 'STATE_NOT_READY', 'Os dados da Cellf precisam ser sincronizados antes de cobrar.');
   }
+  stateVersions.set(record.state,record.updated_at);
   return record.state;
 }
 
 async function writeAppState(state) {
   const config = getSupabaseConfig();
-  const updatedAt = new Date().toISOString();
-  await supabaseRequest('/rest/v1/cellf_app_state?on_conflict=id', {
-    method: 'POST',
-    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-    body: { id: config.stateId, state, updated_at: updatedAt }
-  });
+  const updatedAt = await writeRecord(config.stateId,state,{updated_at:stateVersions.get(state)});
+  stateVersions.set(state,updatedAt);
   return updatedAt;
 }
 
@@ -113,6 +112,8 @@ export async function updateStripeSale(session, nextStatus = 'paid') {
         const product = state.products?.find(entry => entry.id === item.productId);
         if (!product) continue;
         product.stock = Number(product.stock || 0) - Number(item.quantity || 0);
+        const device = (state.devices || []).find(d=>d.productId===product.id);
+        if (device && product.stock <= 0) {device.status='sold';device.published=false;}
         state.stockMovements ||= [];
         if (!state.stockMovements.some(movement => movement.stripeSaleId === sale.id && movement.productId === product.id)) {
           state.stockMovements.unshift({
@@ -128,6 +129,13 @@ export async function updateStripeSale(session, nextStatus = 'paid') {
         }
       }
       state.stockMovements = (state.stockMovements || []).slice(0, 200);
+      const payment=sale.servicePayment;
+      const order=payment && state.orders?.find(o=>o.id===payment.orderId);
+      if(order) {
+        state.receipts ||= [];
+        if(!state.receipts.some(r=>r.saleId===sale.id)) state.receipts.push({id:`rec-${randomUUID()}`,orderId:order.id,saleId:sale.id,amount:Number(payment.amount),payment:'stripe',createdAt:new Date().toISOString()});
+        order.receiptsTracked=true;order.payment='stripe';
+      }
 
       if (sale.attendanceType === 'delivery' && sale.deliveryAddress) {
         state.deliveries ||= [];

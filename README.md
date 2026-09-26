@@ -12,12 +12,18 @@ Sistema de gestão para assistência técnica e comércio de celulares, com iden
 - **Serviços:** catálogo de reparos com preço, custo, duração, garantia e descrição técnica padrão.
 - **Vendas / PDV:** atendimento de balcão, registro de vendas e cobrança segura pelo Stripe Checkout.
 - **Contas a pagar:** controle de vencimentos e confirmação de pagamentos.
+- **Caixa e recebimentos:** abertura, suprimento, sangria, recebimentos parciais de OS e conferência de fechamento.
+- **Equipe:** acessos individuais, permissões por módulo e proteção de custos no servidor.
+- **Aparelhos e vitrine:** cadastro, fotos, procedência, venda no PDV e vitrine pública em `/vitrine`.
+- **Documentação fiscal:** situação da habilitação e exportação do movimento para o contador; emissão fiscal não habilitada.
 - **Relatórios:** lucro real, margens, produtividade, conversão de orçamentos, oportunidades pendentes e valores recusados.
 - **Configurações:** sub-abas Empresa, Administrador, Documentos, Operação, Avisos e Privacidade, reunindo nome, slogan, CNPJ, responsável, endereço, anexos empresariais e preferências da loja em um único formulário.
 
 A plataforma também oferece busca global, notificações, consulta de IMEI por proxy seguro, mensagens de WhatsApp por etapa, pós-venda com link para avaliação no Google e documentos profissionais em A4, bobina térmica de 80 mm e etiqueta de 58 mm. A impressão do navegador permite salvar orçamento e ordem de serviço em PDF. Toda a navegação é adaptada para computador, tablet e celular.
 
 ## Como rodar
+
+Veja a [cobertura funcional e as pendências de ativação](docs/reparopro-coverage.md). Os atalhos de WhatsApp preparam mensagens para envio manual; não representam automação sem API oficial.
 
 É necessário Node.js 20 ou superior.
 

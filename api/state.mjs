@@ -3,11 +3,11 @@ import {
   MAX_STATE_BYTES,
   getSupabaseConfig,
   readJsonBody,
-  requireAuthenticatedSession,
   sendApiError,
   sendJson,
   supabaseRequest
 } from './supabase.mjs';
+import { accessFor, readRecord, writeRecord, stateForAccess, mergeEmployeeState } from './access.mjs';
 
 export default async function handler(request, response) {
   const method = String(request.method || 'GET').toUpperCase();
@@ -20,7 +20,7 @@ export default async function handler(request, response) {
   }
 
   try {
-    requireAuthenticatedSession(request);
+    const access = await accessFor(request);
     const config = getSupabaseConfig();
 
     if (method === 'GET') {
@@ -29,7 +29,8 @@ export default async function handler(request, response) {
       const rows = await supabaseRequest(path);
       const record = Array.isArray(rows) ? rows[0] : null;
       return sendJson(response, 200, {
-        state: record?.state || null,
+        state: stateForAccess(record?.state || null, access),
+        access,
         updatedAt: record?.updated_at || null,
         source: 'supabase'
       });
@@ -41,6 +42,14 @@ export default async function handler(request, response) {
     }
 
     const updatedAt = new Date().toISOString();
+    if (!access.admin || body.updatedAt) {
+      const previous = await readRecord();
+      if (!access.admin && !body.updatedAt) throw new ApiError(409, 'VERSION_REQUIRED', 'Recarregue os dados antes de salvar.');
+      if (body.updatedAt && body.updatedAt !== previous?.updated_at) throw new ApiError(409, 'STATE_CONFLICT', 'Outro dispositivo atualizou os dados. Recarregue antes de salvar.');
+      const next = access.admin ? body.state : mergeEmployeeState(previous?.state || {}, body.state, access);
+      const savedAt = await writeRecord(config.stateId, next, previous);
+      return sendJson(response, 200, { state: stateForAccess(next, access), access, updatedAt: savedAt, source: 'supabase' });
+    }
     const records = await supabaseRequest('/rest/v1/cellf_app_state?on_conflict=id', {
       method: 'POST',
       headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
