@@ -418,7 +418,8 @@ test('o estado inicial e a migração preservam slogan e metadados de documentos
 test('a identidade exibida no sistema utiliza o slogan cadastrado', () => {
   const syncSource = functionSource('syncShell');
 
-  assert.match(syncSource, /brandCaption\.textContent\s*=\s*state\.settings\.slogan/u);
+  assert.match(syncSource, /document\.title\s*=/u);
+  assert.match(syncSource, /state\.settings\.slogan/u);
   assert.match(settingsSource, /document\.title\s*=/u);
   assert.match(settingsSource, /state\.settings\.slogan/u);
 });

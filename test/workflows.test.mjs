@@ -130,6 +130,7 @@ class FakeDocument {
   constructor() {
     this.elements = new Map();
     this.createdElements = [];
+    this.title = '';
     this.body = new FakeElement('body');
     this.activeElement = this.body;
     this.views = [
@@ -145,7 +146,7 @@ class FakeDocument {
 
     for (const id of [
       'app-content', 'toast-region', 'nav-orders-count', 'nav-deliveries-count', 'notification-dot',
-      'profile-name', 'profile-role', 'brand-caption', 'topbar-date',
+      'profile-name', 'profile-role', 'topbar-date',
       'pos-search', 'command-results', 'sidebar', 'sidebar-backdrop',
       'menu-button', 'sidebar-close', 'current-view-label', 'topbar-context',
       'imei-form', 'open-reminders', 'settings-form', 'company-document-name',
@@ -1125,7 +1126,7 @@ test('o perfil e os avisos são sincronizados após persistir alterações', () 
   assert.equal(api.saveState(), true);
   assert.equal(document.querySelector('#profile-name').textContent, 'Pessoa Responsável');
   assert.equal(document.querySelector('#profile-role').textContent, 'Gestora');
-  assert.equal(document.querySelector('#brand-caption').textContent, 'Assistência com confiança');
+  assert.equal(document.title, 'Cellf Testes — Assistência com confiança');
   assert.equal(document.querySelector('.user-card .avatar').textContent, 'PR');
   assert.equal(document.querySelector('#notification-dot').style.display, 'block');
 });

@@ -636,13 +636,11 @@ function syncShell() {
   const profile = document.querySelector('#profile-name');
   const role = document.querySelector('#profile-role');
   const avatar = document.querySelector('.user-card .avatar');
-  const brandCaption = document.querySelector('#brand-caption');
   const breadcrumbBrand = document.querySelector('.breadcrumb > span:first-child');
   const topbarDate = document.querySelector('#topbar-date');
   if (profile) profile.textContent = state.settings.managerName || 'Equipe Cellf';
   if (role) role.textContent = state.settings.managerRole || 'Administrador';
   if (avatar) avatar.textContent = initials(state.settings.managerName);
-  if (brandCaption) brandCaption.textContent = state.settings.slogan || state.settings.legalName || 'Reparo e Comércio';
   if (breadcrumbBrand) breadcrumbBrand.textContent = state.settings.companyName || 'Cellf';
   if (topbarDate) topbarDate.textContent = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' }).format(new Date()).replaceAll('.', '');
   if (typeof document.title === 'string') document.title = `${state.settings.companyName || 'Cellf'} — ${state.settings.slogan || 'Reparo e Comércio'}`;

@@ -316,23 +316,13 @@ button:disabled, input:disabled, select:disabled { cursor: not-allowed; opacity:
 .brand {
   position: relative;
   flex: 0 0 auto;
-  margin: 0 0 7px;
+  margin: 0 0 22px;
   border: 1px solid rgba(224, 249, 103, .28);
   border-radius: 16px;
   box-shadow: 0 12px 36px rgba(0, 0, 0, .2);
 }
 
 .brand-logo { aspect-ratio: 1135 / 343; padding: 8px 10px; }
-
-.brand-caption {
-  display: block;
-  margin: 0 6px 17px;
-  color: #abb3ad;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: .035em;
-  text-align: center;
-}
 
 .main-nav {
   flex: 1 1 auto;
@@ -415,7 +405,9 @@ button:disabled, input:disabled, select:disabled { cursor: not-allowed; opacity:
 .user-card > span:nth-child(2) { min-width: 0; }
 .user-card strong, .user-card small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .avatar { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 11px; font-size: 11px; }
-.sidebar-close { position: absolute; top: 15px; right: 14px; display: none; }
+.sidebar-overview-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sidebar-overview-row > .nav-item { flex: 1 1 auto; min-width: 0; }
+.sidebar-close { display: none; flex: 0 0 auto; }
 .sidebar-backdrop { display: none; margin: 0; padding: 0; border: 0; }
 
 /* Workspace header and shared actions */
@@ -1807,14 +1799,14 @@ img.company-logo-preview { width: 166px; flex-basis: 166px; }
 
   .sidebar {
     z-index: 70;
-    padding-top: 49px;
+    padding-top: max(22px, env(safe-area-inset-top));
     transform: translateX(-108%);
     transition: transform .24s var(--ease-out);
     box-shadow: 15px 0 45px rgba(0, 0, 0, .25);
   }
 
   .sidebar.open { transform: translateX(0); }
-  .sidebar-close { display: grid; width: 31px; height: 31px; min-height: 31px; border-color: rgba(255, 255, 255, .17); background: rgba(255, 255, 255, .07); color: #fff; }
+  .sidebar-close { display: grid; width: 43px; height: 43px; min-height: 43px; border-color: rgba(255, 255, 255, .17); background: rgba(255, 255, 255, .07); color: #fff; }
   .sidebar-close:hover { border-color: rgba(255, 255, 255, .28); background: rgba(255, 255, 255, .13); }
   .sidebar-backdrop { position: fixed; z-index: 60; inset: 0; display: block; background: rgba(14, 17, 14, .49); backdrop-filter: blur(3px); }
   .sidebar-backdrop[hidden] { display: none !important; }
@@ -2220,7 +2212,6 @@ body {
   box-shadow: 0 13px 34px rgba(0, 0, 0, .38), 0 0 0 1px rgba(217, 241, 90, .17);
 }
 
-.brand-caption { color: #8edcf8; letter-spacing: .055em; }
 .nav-label { color: #929b95; }
 .nav-item { color: #c4cbc6; }
 .nav-item:hover { background: rgba(0, 174, 239, .1); }

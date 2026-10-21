@@ -229,6 +229,14 @@ test('o menu móvel possui fechamento explícito e camada inicialmente oculta', 
   assert.match(backdrop['aria-label'] ?? '', /fechar/iu);
 });
 
+test('o botão de fechar fica ao lado de Visão geral no menu móvel', () => {
+  const row = html.match(/<div class="sidebar-overview-row">([\s\S]*?)<\/div>/u)?.[1];
+
+  assert.ok(row, 'A linha de Visão geral precisa existir.');
+  assert.ok(row.indexOf('data-view="dashboard"') >= 0);
+  assert.ok(row.indexOf('id="sidebar-close"') > row.indexOf('data-view="dashboard"'));
+});
+
 test('a busca global anuncia atalhos de teclado e a janela controlada', () => {
   const search = elementById('global-search');
   const shortcuts = search['aria-keyshortcuts'] ?? '';
