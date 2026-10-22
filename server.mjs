@@ -9,6 +9,8 @@ import stripeHandler from './api/stripe.mjs';
 import stripeWebhookHandler from './api/stripe-webhook.mjs';
 import teamHandler from './api/team.mjs';
 import showcaseHandler from './api/showcase.mjs';
+import brandingHandler from './api/branding.mjs';
+import shopHandler from './api/shop.mjs';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const publicDir = join(root, 'public');
@@ -127,6 +129,8 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/stripe/webhook') return stripeWebhookHandler(req, res);
   if (pathname === '/api/team') return teamHandler(req, res);
   if (pathname === '/api/showcase') return showcaseHandler(req, res);
+  if (pathname === '/api/branding') return brandingHandler(req, res);
+  if (pathname === '/api/shop') return shopHandler(req, res);
   if (pathname.startsWith('/api/')) return json(res, 404, { message: 'Rota não encontrada.' });
   if (req.method !== 'GET' && req.method !== 'HEAD') return json(res, 405, { message: 'Método não permitido.' });
   return serveStatic(req, res);

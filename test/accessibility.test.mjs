@@ -229,6 +229,13 @@ test('o menu móvel possui fechamento explícito e camada inicialmente oculta', 
   assert.match(backdrop['aria-label'] ?? '', /fechar/iu);
 });
 
+test('a barra superior não duplica a ação de criar ordem', () => {
+  const actions = html.match(/<div class="top-actions"[^>]*>([\s\S]*?)<\/div>/u)?.[1];
+
+  assert.ok(actions, 'O grupo de ações da barra superior precisa existir.');
+  assert.doesNotMatch(actions, /data-action="new-order"/u);
+});
+
 test('o botão de fechar fica ao lado de Visão geral no menu móvel', () => {
   const row = html.match(/<div class="sidebar-overview-row">([\s\S]*?)<\/div>/u)?.[1];
 

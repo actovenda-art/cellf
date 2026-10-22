@@ -9,6 +9,8 @@ Sistema de gestão para assistência técnica e comércio de celulares, com iden
 - **Clientes:** cadastro, dados de contato e histórico de atendimento.
 - **Agenda:** organização dos compromissos e da rotina da assistência.
 - **Produtos e estoque:** preços, custos, SKU, estoque mínimo e movimentações.
+- **Loja online:** publicação individual de produtos, carrinho, conta por CPF e PIN de quatro dígitos, retirada ou entrega, Checkout Stripe, histórico de compras e ordens, garantias, gráfico de utilização e avaliações. Comentários de avaliações ficam privados; a vitrine publica apenas quantidades de avaliações positivas e negativas.
+- **Solicitar orçamento:** formulário público ou autenticado com modelo, histórico e fotos privadas da frente e de trás do aparelho.
 - **Serviços:** catálogo de reparos com preço, custo, duração, garantia e descrição técnica padrão.
 - **Vendas / PDV:** atendimento de balcão, registro de vendas e cobrança segura pelo Stripe Checkout.
 - **Contas a pagar:** controle de vencimentos e confirmação de pagamentos.
@@ -17,7 +19,8 @@ Sistema de gestão para assistência técnica e comércio de celulares, com iden
 - **Aparelhos e vitrine:** cadastro, fotos, procedência, venda no PDV e vitrine pública em `/vitrine`.
 - **Documentação fiscal:** situação da habilitação e exportação do movimento para o contador; emissão fiscal não habilitada.
 - **Relatórios:** lucro real, margens, produtividade, conversão de orçamentos, oportunidades pendentes e valores recusados.
-- **Configurações:** sub-abas Empresa, Administrador, Documentos, Operação, Avisos e Privacidade, reunindo nome, slogan, CNPJ, responsável, endereço, anexos empresariais e preferências da loja em um único formulário.
+- **Configurações:** sub-abas Empresa, Branding, Documentos, Loja online, Operação, Avisos e Privacidade. Empresa reúne cadastro, contato, endereço e administrador; Documentos reúne anexos empresariais; Branding oferece nome, slogan, cores e logo com prévia ao vivo. Loja online reúne entrega por km, horários, solicitações de orçamento e aprovação do histórico por CPF. O botão de salvar confirma a persistência na nuvem antes de anunciar sucesso.
+- **Branding:** configurações no estado remoto, logos convertidas em PNG e enviadas ao escopo privado `branding/` do Supabase Storage. A API pública `/api/branding` expõe somente nome, slogan, cores e a logo selecionada, usada no sistema, apresentação, vitrine e documentos. Alterações exigem administrador. PNG, JPG, WebP e SVG de até 3 MB são otimizados para no máximo 1600 px e 2 MB; nenhuma logo é gravada em armazenamento local do navegador.
 
 A plataforma também oferece busca global, notificações, consulta de IMEI por proxy seguro, mensagens de WhatsApp por etapa, pós-venda com link para avaliação no Google e documentos profissionais em A4, bobina térmica de 80 mm e etiqueta de 58 mm. A impressão do navegador permite salvar orçamento e ordem de serviço em PDF. Toda a navegação é adaptada para computador, tablet e celular.
 
@@ -63,7 +66,16 @@ Os testes verificam também a autenticação, a persistência remota, as políti
 3. Opcionalmente, personalize `SUPABASE_STATE_ID` e `SUPABASE_DOCUMENT_BUCKET` se precisar separar ambientes ou alterar o nome do bucket.
 4. Reinicie o servidor e faça login com o e-mail e a senha configurados.
 
-O navegador conversa apenas com as rotas `/api/session`, `/api/state` e `/api/documents`; a chave privilegiada permanece no servidor. A sessão é protegida por um cookie assinado `HttpOnly`, e documentos e fotos das ordens são enviados e baixados por URLs assinadas com validade limitada.
+O navegador conversa apenas com as rotas da própria aplicação; a chave privilegiada permanece no servidor. As sessões internas e dos clientes usam cookies assinados `HttpOnly` separados. Documentos e fotos ficam no bucket privado e são acessados por URLs assinadas com validade limitada. A conta por CPF/PIN permite compras novas, mas ordens e compras antigas só aparecem após o proprietário confirmar a identidade do cliente e aprovar a vinculação em Configurações → Loja online. O PIN tem limite de tentativas; não o reutilize em outros serviços.
+
+## Configurar a loja e as entregas
+
+1. Em Produtos e estoque, edite cada produto destinado à vitrine, preencha a descrição e marque **Publicar este produto na loja online**. Somente itens com preço e estoque positivo aparecem.
+2. Em Configurações → Empresa, confira o endereço da loja. Em Configurações → Loja online, informe o preço por km e cadastre horários futuros com a quantidade de vagas; salve as configurações.
+3. Ative a **Routes API / Compute Routes** em um projeto Google Maps Platform com faturamento configurado. Cadastre `GOOGLE_MAPS_API_KEY` apenas nas variáveis do servidor/Vercel, restrita à Routes API; faça uma nova publicação. Sem chave ou sem rota válida, o checkout de entrega é bloqueado, mas a retirada continua disponível.
+4. Em Configurações → Loja online, confirme pessoalmente a identidade de cada cliente antes de usar **Aprovar histórico**. O CPF e um PIN de quatro dígitos, por si só, não comprovam titularidade.
+
+O frete é recalculado no servidor com a distância de carro retornada pelo Google e o preço por km salvo pelo proprietário. Não há armazenamento local de dados do cliente nem do carrinho; o carrinho dura apenas durante a visita. Os pedidos de orçamento limitam tamanho e quantidade das fotos e ficam em armazenamento privado.
 
 ### Publicação na Vercel
 

@@ -33,7 +33,7 @@ const constants = source.match(
   /const MAX_COMPANY_DOCUMENT_BYTES[\s\S]*?(?=\r?\n\r?\nfunction localDate)/u
 )?.[0];
 
-assert.ok(tabsDeclaration, 'As seis sub-abas das configurações precisam ser declaradas.');
+assert.ok(tabsDeclaration, 'As sub-abas das configurações precisam ser declaradas.');
 assert.ok(keyboardStart >= 0, 'A navegação por teclado das configurações precisa existir.');
 assert.ok(globalShortcutStart > keyboardStart, 'Os atalhos das abas precisam preceder os atalhos globais.');
 assert.ok(constants, 'As configurações de documentos empresariais precisam existir.');
@@ -63,7 +63,7 @@ new Script(helperProgram, { filename: 'company-helpers.test.js' }).runInContext(
 const company = helpers.companyHelpers;
 
 function createTabHarness(initial = 'empresa') {
-  const ids = ['empresa', 'responsavel', 'documentos', 'operacao', 'avisos', 'dados'];
+  const ids = ['empresa', 'branding', 'documentos', 'loja', 'operacao', 'avisos', 'dados'];
   const elements = new Map();
   const listeners = new Map();
   class FakeElement {}
@@ -160,21 +160,22 @@ test('a tela mantém um único formulário para empresa, documentos e preferênc
   assert.match(settingsSource, /pageHeading\([^)]*'Configurações'/u);
 });
 
-test('as configurações apresentam exatamente seis sub-abas com títulos claros', () => {
+test('as configurações apresentam sete sub-abas com títulos claros', () => {
   const { api } = createTabHarness();
   const expected = [
     ['empresa', 'Empresa'],
-    ['responsavel', 'Administrador'],
+    ['branding', 'Branding'],
     ['documentos', 'Documentos'],
+    ['loja', 'Loja online'],
     ['operacao', 'Operação'],
     ['avisos', 'Avisos'],
     ['dados', 'Privacidade']
   ];
   const actual = Array.from(api.tabs, tab => [tab.id, tab.label]);
 
-  assert.equal(api.tabs.length, 6);
+  assert.equal(api.tabs.length, 7);
   assert.deepEqual(actual, expected);
-  assert.match(readme, /sub-abas Empresa, Administrador, Documentos, Operação, Avisos e Privacidade/u);
+  assert.match(readme, /sub-abas Empresa, Branding, Documentos, Loja online, Operação, Avisos e Privacidade/u);
 });
 
 test('as sub-abas utilizam os landmarks e os controles ARIA recomendados', () => {
@@ -189,7 +190,7 @@ test('as sub-abas utilizam os landmarks e os controles ARIA recomendados', () =>
   assert.match(settingsSource, /\btabindex="/u);
   assert.match(settingsSource, /data-action="settings-tab"/u);
   assert.match(settingsSource, /data-tab="/u);
-  assert.doesNotMatch(settingsSource, /href="#(?:empresa|responsavel|documentos|operacao|avisos|dados)"/u);
+  assert.doesNotMatch(settingsSource, /href="#(?:empresa|branding|documentos|operacao|avisos|dados)"/u);
 });
 
 test('cada painel possui nome associado à sua aba e somente Empresa inicia visível', () => {
@@ -251,10 +252,11 @@ test('as setas percorrem as sub-abas nos dois sentidos e respeitam a navegação
     ['dados', 'ArrowRight', 'empresa'],
     ['empresa', 'ArrowUp', 'dados'],
     ['dados', 'ArrowDown', 'empresa'],
-    ['documentos', 'ArrowRight', 'operacao'],
-    ['documentos', 'ArrowLeft', 'responsavel'],
+    ['documentos', 'ArrowRight', 'loja'],
+    ['documentos', 'ArrowLeft', 'branding'],
+    ['loja', 'ArrowRight', 'operacao'],
     ['operacao', 'ArrowDown', 'avisos'],
-    ['operacao', 'ArrowUp', 'documentos']
+    ['operacao', 'ArrowUp', 'loja']
   ];
 
   for (const [initial, key, expected] of scenarios) {
@@ -329,8 +331,8 @@ test('o formulário oferece apenas um botão global para salvar as configuraçõ
   assert.match(settingsSource, /<button\b(?=[^>]*data-action="settings-tab")(?=[^>]*\btype="button")[^>]*>/u);
 });
 
-test('as configurações preservam seis seções para dados, documentos e preferências', () => {
-  for (const section of ['empresa', 'responsavel', 'documentos', 'operacao', 'avisos', 'dados']) {
+test('as configurações preservam sete seções para dados, loja, documentos e preferências', () => {
+  for (const section of ['empresa', 'branding', 'documentos', 'loja', 'operacao', 'avisos', 'dados']) {
     assert.match(
       settingsSource,
       new RegExp('<section\\b[^>]*id="' + section + '"', 'u'),

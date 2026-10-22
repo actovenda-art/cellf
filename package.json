@@ -6,10 +6,12 @@
   "scripts": {
     "start": "node server.mjs",
     "dev": "node --watch server.mjs",
-    "check": "node --check server.mjs && node --check public/app.js && node --check api/health.mjs && node --check api/imei.mjs && node --check api/supabase.mjs && node --check api/session.mjs && node --check api/state.mjs && node --check api/documents.mjs && node --check api/stripe.mjs && node --check api/stripe-webhook.mjs",
+    "check": "node --check server.mjs && node --check public/app.js && node --check public/branding.js && node --check public/shop.js && node --check api/shop.mjs && node --check api/branding.mjs && node --check api/health.mjs && node --check api/imei.mjs && node --check api/supabase.mjs && node --check api/session.mjs && node --check api/state.mjs && node --check api/documents.mjs && node --check api/stripe.mjs && node --check api/stripe-webhook.mjs",
     "test": "node --test",
     "check:operations": "node --check public/operations.js && node --check api/access.mjs && node --check api/team.mjs && node --check api/showcase.mjs",
     "test:responsive": "node scripts/review-responsive.mjs",
+    "test:branding": "node scripts/review-branding.mjs",
+    "test:shop": "node scripts/review-shop.mjs",
     "test:workflows": "node scripts/review-workflows.mjs"
   },
   "engines": {

@@ -18,12 +18,13 @@ const DEVICE_CHECKLIST = [
 const OPERATIONAL_DATA_VERSION = 'controle-cellf-2026-09-v1';
 const ANONYMOUS_CUSTOMER = 'Cliente sem identificação';
 const SETTINGS_TABS = [
-  { id: 'empresa', label: 'Empresa', icon: '◇' },
-  { id: 'responsavel', label: 'Administrador', icon: '♧' },
-  { id: 'documentos', label: 'Documentos', icon: '▤' },
-  { id: 'operacao', label: 'Operação', icon: '⌁' },
-  { id: 'avisos', label: 'Avisos', icon: '◷' },
-  { id: 'dados', label: 'Privacidade', icon: '◈' }
+  { id: 'empresa', label: 'Empresa', icon: 'building' },
+  { id: 'branding', label: 'Branding', icon: 'palette' },
+  { id: 'documentos', label: 'Documentos', icon: 'file' },
+  { id: 'loja', label: 'Loja online', icon: 'building' },
+  { id: 'operacao', label: 'Operação', icon: 'sliders' },
+  { id: 'avisos', label: 'Avisos', icon: 'bell' },
+  { id: 'dados', label: 'Privacidade', icon: 'shield' }
 ];
 const MAX_COMPANY_DOCUMENT_BYTES = 10 * 1024 * 1024;
 const CLOUD_SAVE_DEBOUNCE_MS = 350;
@@ -116,6 +117,7 @@ const seed = {
   settings: {
     companyName: 'Cellf',
     slogan: 'Reparo e Comércio',
+    branding: { primaryColor: '#d9f15a', secondaryColor: '#00aeef', logo: null },
     legalName: 'Cellf — Reparo e Comércio',
     document: '',
     phone: '',
@@ -128,6 +130,8 @@ const seed = {
     openingTime: '09:00',
     closingTime: '18:00',
     warrantyDays: 90,
+    deliveryPricePerKm: 0,
+    deliverySlots: [],
     defaultDeadlineDays: 2,
     dailyRevenueGoal: 500,
     googleReviewUrl: '',
@@ -633,6 +637,7 @@ function associateFormLabels(root = document) {
   });
 }
 function syncShell() {
+  globalThis.CellfBranding?.apply(state.settings);
   const profile = document.querySelector('#profile-name');
   const role = document.querySelector('#profile-role');
   const avatar = document.querySelector('.user-card .avatar');
@@ -643,7 +648,7 @@ function syncShell() {
   if (avatar) avatar.textContent = initials(state.settings.managerName);
   if (breadcrumbBrand) breadcrumbBrand.textContent = state.settings.companyName || 'Cellf';
   if (topbarDate) topbarDate.textContent = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' }).format(new Date()).replaceAll('.', '');
-  if (typeof document.title === 'string') document.title = `${state.settings.companyName || 'Cellf'} — ${state.settings.slogan || 'Reparo e Comércio'}`;
+  if (typeof document.title === 'string') document.title = [state.settings.companyName || 'Cellf', state.settings.slogan ?? 'Reparo e Comércio'].filter(Boolean).join(' — ');
 }
 
 function renderDashboard() {
@@ -734,7 +739,7 @@ function renderProducts() {
   bindTableFilter('products');
 }
 function productRows(list) {
-  return `<thead><tr><th>PRODUTO</th><th>CATEGORIA</th><th>PREÇO</th><th>ESTOQUE</th><th>STATUS</th><th><span class="sr-only">Ações</span></th></tr></thead><tbody>${list.length ? list.map(product => `<tr><td><div class="cell-main"><span class="product-thumb">${esc(product.name?.[0] || 'P')}</span><span><strong>${esc(product.name)}</strong><small>${esc(product.sku)}</small></span></div></td><td>${esc(product.category)}</td><td class="money">${brl.format(product.price)}</td><td><span class="stock-pill ${product.stock <= product.minimum ? 'low' : ''}">${product.stock} un.</span><br><small>Mínimo: ${product.minimum}</small></td><td><span class="status ${product.stock <= product.minimum ? 'overdue' : 'ready'}">${product.stock === 0 ? 'Sem estoque' : product.stock <= product.minimum ? 'Estoque baixo' : 'Disponível'}</span></td><td><button class="more-button" data-action="edit-product" data-id="${esc(product.id)}" aria-label="Editar ${esc(product.name)}">•••</button></td></tr>`).join('') : '<tr><td colspan="6"><div class="table-empty">Nenhum produto encontrado.</div></td></tr>'}</tbody>`;
+  return `<thead><tr><th>PRODUTO</th><th>CATEGORIA</th><th>PREÇO</th><th>ESTOQUE</th><th>STATUS</th><th><span class="sr-only">Ações</span></th></tr></thead><tbody>${list.length ? list.map(product => `<tr><td><div class="cell-main"><span class="product-thumb">${esc(product.name?.[0] || 'P')}</span><span><strong>${esc(product.name)}</strong><small>${esc(product.sku)}${product.online ? ' · Loja online' : ''}</small></span></div></td><td>${esc(product.category)}</td><td class="money">${brl.format(product.price)}</td><td><span class="stock-pill ${product.stock <= product.minimum ? 'low' : ''}">${product.stock} un.</span><br><small>Mínimo: ${product.minimum}</small></td><td><span class="status ${product.stock <= product.minimum ? 'overdue' : 'ready'}">${product.stock === 0 ? 'Sem estoque' : product.stock <= product.minimum ? 'Estoque baixo' : 'Disponível'}</span></td><td><button class="more-button" data-action="edit-product" data-id="${esc(product.id)}" aria-label="Editar ${esc(product.name)}">•••</button></td></tr>`).join('') : '<tr><td colspan="6"><div class="table-empty">Nenhum produto encontrado.</div></td></tr>'}</tbody>`;
 }
 function productMobile(list) { return list.map(product => `<article class="mobile-card"><div class="mobile-card-top"><div><strong>${esc(product.name)}</strong><small>${esc(product.sku)} · ${esc(product.category)}</small></div><button class="more-button" data-action="edit-product" data-id="${esc(product.id)}" aria-label="Editar produto">•••</button></div><div class="mobile-card-bottom"><span>${Number(product.stock || 0)} un.</span><strong class="money">${brl.format(product.price)}</strong></div></article>`).join(''); }
 
@@ -1106,6 +1111,15 @@ function openPrintableDocument({ title, number, customer, issuedAt, body, total 
   const width = paper === 'thermal58' ? '58mm' : paper === 'thermal80' ? '80mm' : '210mm';
   const pageSize = thermal ? width : 'A4';
   popup.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(title)} ${esc(number)}</title><style>*{box-sizing:border-box}body{font:${thermal ? '11px/1.35' : '14px/1.5'} Arial,sans-serif;color:#111;margin:0;background:#f3f6f8}.sheet{width:${width};min-height:${thermal ? 'auto' : '270mm'};margin:16px auto;padding:${thermal ? '5mm 3mm' : '18mm'};background:#fff}.brand{display:flex;${thermal ? 'flex-direction:column;' : ''}justify-content:space-between;gap:${thermal ? '4px' : '24px'};padding-bottom:${thermal ? '8px' : '18px'};border-bottom:${thermal ? '1px' : '3px'} solid #129cff}.brand h1{font-size:${thermal ? '20px' : '30px'};margin:0}.brand p,.muted{color:#5b6570;margin:3px 0}.document-title{display:flex;${thermal ? 'flex-direction:column;align-items:flex-start;' : 'justify-content:space-between;align-items:end;'}gap:4px;margin:${thermal ? '12px 0 8px' : '28px 0 18px'}.document-title h2{font-size:${thermal ? '16px' : '22px'};margin:0}.number{font-weight:700;color:#0877c9}.grid{display:grid;grid-template-columns:${thermal ? '1fr' : '1fr 1fr'};gap:${thermal ? '5px' : '12px'};margin:${thermal ? '9px 0' : '16px 0'}.box{border:1px solid #dbe2e8;border-radius:${thermal ? '4px' : '10px'};padding:${thermal ? '6px' : '12px'}.box small{display:block;color:#66727c;text-transform:uppercase;letter-spacing:.08em}.box strong{display:block;margin-top:2px}.content{margin:${thermal ? '10px 0' : '22px 0'}.content table{width:100%;border-collapse:collapse}.content th,.content td{padding:${thermal ? '5px 2px' : '10px 8px'};border-bottom:1px solid #dde3e8;text-align:left}.content th:last-child,.content td:last-child{text-align:right}.total{margin:${thermal ? '10px 0 0' : '20px 0 0 auto'};width:${thermal ? '100%' : '48%'};padding:${thermal ? '8px' : '14px'};border-radius:${thermal ? '4px' : '10px'};background:#edf8ff;font-size:${thermal ? '14px' : '18px'};display:flex;justify-content:space-between}.notes{margin-top:${thermal ? '10px' : '24px'};padding:${thermal ? '7px' : '14px'};border-left:${thermal ? '2px' : '4px'} solid #129cff;background:#f7fafc;white-space:pre-line}.signatures{display:grid;grid-template-columns:${thermal ? '1fr' : '1fr 1fr'};gap:${thermal ? '34px' : '50px'};margin-top:${thermal ? '35px' : '70px'};text-align:center}.signature{border-top:1px solid #222;padding-top:6px}.footer{margin-top:${thermal ? '22px' : '45px'};border-top:1px solid #dbe2e8;padding-top:8px;color:#66727c;font-size:${thermal ? '9px' : '12px'}}@media print{body{background:#fff}.sheet{margin:0;width:auto;min-height:auto;padding:${thermal ? '2mm' : '10mm'}}@page{size:${pageSize};margin:0}}</style></head><body><main class="sheet"><header class="brand"><div><img src="${location.origin}/cellf-logo-brand.svg" alt="CELLF" style="width:${thermal ? '130px' : '190px'};max-width:100%;height:auto"><h1>${esc(company.companyName || 'Cellf')}</h1><p>${esc(company.slogan || 'Reparo e Comércio')}</p></div><div><strong>${esc(company.legalName || '')}</strong><p>${esc(company.document ? `CNPJ ${company.document}` : '')}</p><p>${esc(company.phone || '')}</p></div></header><section class="document-title"><div><p class="muted">DOCUMENTO COMERCIAL</p><h2>${esc(title)}</h2></div><span class="number">Nº ${esc(number)}</span></section><section class="grid"><div class="box"><small>Cliente</small><strong>${esc(customer.name)}</strong></div><div class="box"><small>CPF / CNPJ</small><strong>${esc(customer.document || 'Não informado')}</strong></div><div class="box"><small>Emissão</small><strong>${esc(formatDateTime(issuedAt || new Date().toISOString()))}</strong></div><div class="box"><small>Telefone</small><strong>${esc(customer.phone || 'Não informado')}</strong></div></section><section class="content">${body}</section>${total ? `<div class="total"><span>Total</span><strong>${esc(total)}</strong></div>` : ''}${notes ? `<div class="notes">${esc(notes)}</div>` : ''}<section class="signatures"><div class="signature">${esc(customer.name)}</div><div class="signature">${esc(company.companyName || 'Cellf')}</div></section><footer class="footer">${esc(companyLocation)}${company.email ? ` · ${esc(company.email)}` : ''}<br>Documento emitido pelo sistema Cellf.</footer></main><script>window.addEventListener('load',()=>{window.focus();window.print();});<\/script></body></html>`);
+  if (globalThis.CellfBranding) {
+    const printBrand = globalThis.CellfBranding.normalize(company.branding);
+    const logo = popup.document.querySelector('.brand img');
+    if (logo) { logo.src = new URL(globalThis.CellfBranding.logoUrl(company), location.origin).href; logo.alt = company.companyName || 'Cellf'; }
+    popup.document.querySelector('.brand')?.style.setProperty('border-color', printBrand.secondaryColor);
+    popup.document.querySelector('.notes')?.style.setProperty('border-color', printBrand.secondaryColor);
+    popup.document.querySelector('.number')?.style.setProperty('color', globalThis.CellfBranding.textColor(printBrand.secondaryColor));
+    popup.document.querySelector('.total')?.style.setProperty('background', `color-mix(in srgb, ${printBrand.primaryColor} 24%, white)`);
+  }
   popup.document.close();
   return true;
 }
@@ -1385,36 +1399,68 @@ function activateSettingsTab(tab, { focus = false } = {}) {
   return true;
 }
 
+function settingsIcon(name) {
+  const paths = {
+    building: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 21v-5h6v5M8 7h1m6 0h1M8 11h1m6 0h1"/>',
+    palette: '<path d="M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 1-3.7 1.5 1.5 0 0 1 1-2.8h2a4 4 0 0 0 4-4C21 6.4 17 3 12 3Z"/><path d="M7 10h.01M10 7h.01M15 7h.01"/>',
+    file: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>',
+    sliders: '<path d="M4 7h4m4 0h8M4 17h8m4 0h4"/><circle cx="10" cy="7" r="2"/><circle cx="14" cy="17" r="2"/>',
+    bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 12h4"/>',
+    shield: '<path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Z"/><path d="m8 12 3 3 5-6"/>'
+  };
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.sliders}</svg>`;
+}
+
 function renderSettings() {
   const settings = state.settings;
+  const branding = globalThis.CellfBranding?.normalize(settings.branding) || seed.settings.branding;
   const storageAvailable = companyDocumentStorageAvailable();
   if (!SETTINGS_TABS.some(tab => tab.id === activeSettingsTab)) activeSettingsTab = 'empresa';
-  content.innerHTML = `${pageHeading('ADMINISTRAÇÃO', 'Configurações', 'Atualize a identidade da empresa, seus documentos e a operação da loja.')}
-    <div class="settings-layout settings-tabs-layout">
+  content.innerHTML = `${pageHeading('DO SEU JEITO', 'Configurações', 'A identidade da sua empresa e os detalhes que fazem a loja funcionar.')}
+    <div class="settings-layout settings-tabs-layout settings-upgraded">
       <nav class="settings-tabs" role="tablist" aria-label="Seções de configurações">
-        ${SETTINGS_TABS.map(tab => `<button id="settings-tab-${tab.id}" class="settings-tab ${activeSettingsTab === tab.id ? 'active' : ''}" type="button" role="tab" aria-selected="${activeSettingsTab === tab.id}" aria-controls="${tab.id}" tabindex="${activeSettingsTab === tab.id ? '0' : '-1'}" data-action="settings-tab" data-tab="${tab.id}"><span aria-hidden="true">${tab.icon}</span><span>${tab.label}</span></button>`).join('')}
+        ${SETTINGS_TABS.map(tab => `<button id="settings-tab-${tab.id}" class="settings-tab ${activeSettingsTab === tab.id ? 'active' : ''}" type="button" role="tab" aria-selected="${activeSettingsTab === tab.id}" aria-controls="${tab.id}" tabindex="${activeSettingsTab === tab.id ? '0' : '-1'}" data-action="settings-tab" data-tab="${tab.id}"><span class="settings-tab-icon">${settingsIcon(tab.icon)}</span><span>${tab.label}</span></button>`).join('')}
       </nav>
       <form id="settings-form" class="settings-content settings-tab-content">
         <section id="empresa" class="card settings-section" ${settingsPanelAttributes('empresa')}>
-          <header class="card-header"><div><p class="eyebrow">IDENTIDADE E CONTATO</p><h2>Dados da empresa</h2></div></header>
+          <header class="card-header"><span class="settings-section-icon">${settingsIcon('building')}</span><div><h2>Dados da empresa</h2><p>Informações cadastrais, contatos e responsável pela loja.</p></div></header>
           <div class="settings-grid form-grid">
-            <div class="field"><label>NOME DA EMPRESA *</label><input name="companyName" autocomplete="organization" required value="${esc(settings.companyName)}" placeholder="Ex.: Cellf"></div>
-            <div class="field"><label>SLOGAN</label><input name="slogan" maxlength="100" value="${esc(settings.slogan)}" placeholder="Ex.: Reparo e Comércio"></div>
+            <div class="settings-field-heading full"><h3>Cadastro</h3><p>Dados usados nos recibos e documentos emitidos pela loja.</p></div>
             <div class="field"><label>RAZÃO SOCIAL</label><input name="legalName" value="${esc(settings.legalName)}" placeholder="Nome empresarial completo"></div>
             <div class="field"><label>CNPJ</label><input id="company-cnpj" name="document" inputmode="numeric" maxlength="18" autocomplete="off" value="${esc(formatCnpj(settings.document))}" placeholder="00.000.000/0000-00" aria-describedby="company-cnpj-help"><small id="company-cnpj-help" class="field-help">Informe os 14 dígitos do cadastro da empresa.</small></div>
+            <div class="settings-field-heading full"><h3>Contato e endereço</h3><p>Os canais e a localização da empresa.</p></div>
             <div class="field"><label>TELEFONE / WHATSAPP</label><input name="phone" autocomplete="tel" value="${esc(settings.phone)}" placeholder="(11) 99999-9999"></div>
             <div class="field"><label>E-MAIL DE CONTATO</label><input name="email" type="email" autocomplete="email" value="${esc(settings.email)}" placeholder="contato@cellf.com.br"></div>
             <div class="field full"><label>ENDEREÇO COMPLETO</label><input name="address" autocomplete="street-address" value="${esc(settings.address)}" placeholder="Rua, número, bairro e complemento"></div>
             <div class="field"><label>CIDADE / ESTADO</label><input name="city" autocomplete="address-level2" value="${esc(settings.city)}" placeholder="São Paulo / SP"></div>
             <div class="field"><label>CEP</label><input name="postalCode" autocomplete="postal-code" value="${esc(settings.postalCode)}" placeholder="00000-000"></div>
+            <div class="settings-field-heading full"><h3>Administrador</h3><p>Responsável exibido no perfil da empresa.</p></div>
+            <div class="field"><label>NOME DO ADMINISTRADOR *</label><input name="managerName" autocomplete="name" required value="${esc(settings.managerName)}"></div>
+            <div class="field"><label>FUNÇÃO</label><input name="managerRole" value="${esc(settings.managerRole)}" placeholder="Administrador"></div>
           </div>
         </section>
-        <section id="responsavel" class="card settings-section" ${settingsPanelAttributes('responsavel')}>
-          <header class="card-header"><div><p class="eyebrow">RESPONSÁVEL PELA OPERAÇÃO</p><h2>Administrador</h2></div></header>
-          <div class="settings-grid form-grid"><div class="field"><label>NOME DO ADMINISTRADOR *</label><input name="managerName" autocomplete="name" required value="${esc(settings.managerName)}"></div><div class="field"><label>FUNÇÃO</label><input name="managerRole" value="${esc(settings.managerRole)}" placeholder="Administrador"></div></div>
+        <section id="branding" class="card settings-section" ${settingsPanelAttributes('branding')}>
+          <header class="card-header"><span class="settings-section-icon">${settingsIcon('palette')}</span><div><h2>Uma marca com a sua cara</h2><p>Personalize a identidade do sistema, da apresentação e dos documentos.</p></div></header>
+          <div class="branding-layout">
+            <div class="branding-fields">
+              <div class="settings-field-heading"><h3>Identidade</h3><p>Como sua empresa aparece para a equipe e os clientes.</p></div>
+              <div class="field"><label for="brand-company-name">NOME DA EMPRESA *</label><input id="brand-company-name" name="companyName" maxlength="100" autocomplete="organization" required value="${esc(settings.companyName)}" placeholder="Ex.: Cellf"></div>
+              <div class="field"><label for="brand-slogan">SLOGAN</label><input id="brand-slogan" name="slogan" maxlength="100" value="${esc(settings.slogan)}" placeholder="Uma frase que representa a sua empresa"></div>
+              <div class="settings-field-heading"><h3>Logo</h3><p>A imagem é ajustada sem cortes e com a transparência preservada.</p></div>
+              <div class="branding-upload"><div class="branding-logo-tile"><img id="branding-logo-thumbnail" src="/cellf-logo-brand.svg" alt="Prévia da logo"></div><div class="branding-upload-actions"><label class="ghost-button branding-file-label" for="branding-logo-file">Enviar logo<input id="branding-logo-file" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" aria-describedby="branding-file-status branding-file-help"></label><button class="text-button" id="branding-restore-logo" type="button">Usar logo padrão</button></div></div>
+              <small id="branding-file-help" class="field-help">PNG, JPG, WebP ou SVG · até 3 MB. A logo salva fica visível ao público.</small>
+              <p id="branding-file-status" class="branding-file-status" role="status">${esc(branding.logo?.fileName || 'Logo original da CELLF em uso.')}</p>
+              <div class="settings-field-heading branding-colors-heading"><div><h3>Cores da marca</h3><p>Aplique sua paleta aos destaques e elementos da interface.</p></div><button class="text-button" id="branding-reset-colors" type="button">Restaurar cores</button></div>
+              <div class="branding-colors">
+                <div class="field"><label for="brand-primary-color">COR PRINCIPAL</label><div class="branding-color-input"><input type="color" value="${branding.primaryColor}" data-color-for="primaryColor" aria-label="Escolher cor principal"><input id="brand-primary-color" name="primaryColor" value="${branding.primaryColor}" maxlength="7" pattern="#[0-9a-fA-F]{6}" required spellcheck="false" autocomplete="off" aria-label="Código da cor principal"></div><small class="field-help">Seleções e superfícies em destaque.</small></div>
+                <div class="field"><label for="brand-secondary-color">COR SECUNDÁRIA</label><div class="branding-color-input"><input type="color" value="${branding.secondaryColor}" data-color-for="secondaryColor" aria-label="Escolher cor secundária"><input id="brand-secondary-color" name="secondaryColor" value="${branding.secondaryColor}" maxlength="7" pattern="#[0-9a-fA-F]{6}" required spellcheck="false" autocomplete="off" aria-label="Código da cor secundária"></div><small class="field-help">Links, detalhes e indicadores.</small></div>
+              </div>
+            </div>
+            <aside class="branding-preview-column" aria-label="Prévia da identidade visual"><div class="branding-preview-caption"><span>PRÉVIA AO VIVO</span><small>Veja antes de salvar</small></div><div class="branding-preview" id="branding-preview"><div class="branding-preview-logo"><img src="/cellf-logo-brand.svg" alt="Logo da empresa"></div><div class="branding-preview-body"><span class="branding-preview-eyebrow">SUA EMPRESA</span><h3 data-preview-name></h3><p data-preview-slogan></p><div class="branding-preview-nav">${settingsIcon('building')}<span>Visão geral</span><span aria-hidden="true">↗</span></div><div class="branding-preview-card"><span class="branding-preview-dot"></span><div><strong>Pronta para atender</strong><small>Uma identidade em cada detalhe.</small></div></div></div></div><p class="branding-preview-help">A prévia acompanha suas edições. A marca só muda para todos depois de salvar.</p></aside>
+          </div>
         </section>
         <section id="documentos" class="card settings-section company-document-panel" ${settingsPanelAttributes('documentos')}>
-          <header class="card-header"><div><p class="eyebrow">ARQUIVOS DA EMPRESA</p><h2>Documentos</h2></div><span id="company-document-count" class="document-badge">${state.companyDocuments.length} ${state.companyDocuments.length === 1 ? 'arquivo' : 'arquivos'}</span></header>
+          <header class="card-header"><span class="settings-section-icon">${settingsIcon('file')}</span><div><h2>Documentos</h2><p>Contratos, comprovantes e arquivos da empresa em um só lugar.</p></div><span id="company-document-count" class="document-badge">${state.companyDocuments.length} ${state.companyDocuments.length === 1 ? 'arquivo' : 'arquivos'}</span></header>
           <div class="settings-grid company-document-content">
             <div class="document-upload">
               <div class="field document-upload-field"><label for="company-document-name">NOME DO DOCUMENTO</label><input id="company-document-name" name="companyDocumentName" maxlength="120" placeholder="Ex.: Contrato social, CNPJ ou alvará"></div>
@@ -1423,13 +1469,24 @@ function renderSettings() {
               <button type="button" class="primary-button document-upload-button" id="company-document-upload-button" data-action="upload-company-document" ${storageAvailable ? '' : 'disabled'}>＋ Anexar documento</button>
             </div>
             <div id="company-document-list" class="document-list" aria-label="Documentos anexados"></div>
-            <div class="company-privacy-note"><span aria-hidden="true">ⓘ</span><p>Os documentos são enviados diretamente para o armazenamento privado do Supabase. Os downloads utilizam links temporários e protegidos, sem manter arquivos no dispositivo.</p></div>
+            <div class="company-privacy-note"><span aria-hidden="true">ⓘ</span><p>Arquivos privados, disponíveis somente para usuários autorizados da empresa.</p></div>
           </div>
         </section>
         <section id="operacao" class="card settings-section" ${settingsPanelAttributes('operacao')}><header class="card-header"><div><p class="eyebrow">ASSISTÊNCIA TÉCNICA</p><h2>Operação e prazos</h2></div></header><div class="settings-grid form-grid"><div class="field"><label>ABERTURA</label><input name="openingTime" type="time" value="${esc(settings.openingTime)}"></div><div class="field"><label>FECHAMENTO</label><input name="closingTime" type="time" value="${esc(settings.closingTime)}"></div><div class="field"><label>GARANTIA PADRÃO (DIAS)</label><input name="warrantyDays" type="number" min="0" max="3650" value="${Number(settings.warrantyDays || 0)}"></div><div class="field"><label>PRAZO PADRÃO DE ENTREGA (DIAS)</label><input name="defaultDeadlineDays" type="number" min="0" max="365" value="${Number(settings.defaultDeadlineDays || 0)}"></div><div class="field"><label>META DIÁRIA DE FATURAMENTO (R$)</label><input name="dailyRevenueGoal" type="number" min="0" step="0.01" value="${Number(settings.dailyRevenueGoal || 0)}"></div><div class="field"><label>LINK DE AVALIAÇÃO DO GOOGLE</label><input name="googleReviewUrl" type="url" value="${esc(settings.googleReviewUrl || '')}" placeholder="https://g.page/r/.../review"><small class="field-help">Usado na mensagem de pós-venda enviada pelo WhatsApp.</small></div><div class="field full"><label>OBSERVAÇÕES PADRÃO DA ORDEM</label><textarea name="orderNotes">${esc(settings.orderNotes)}</textarea></div></div></section>
+        <section id="loja" class="card settings-section shop-owner-settings" ${settingsPanelAttributes('loja')}>
+          <header class="card-header"><span class="settings-section-icon">${settingsIcon('building')}</span><div><h2>Loja online e entregas</h2><p>Publique produtos no estoque, configure o frete e acompanhe as solicitações.</p></div></header>
+          ${currentAccess.admin ? `<div class="settings-grid form-grid">
+            <div class="field full"><label>PREÇO DA ENTREGA POR KM (R$)</label><input name="deliveryPricePerKm" type="number" min="0" max="1000" step="0.01" value="${Number(settings.deliveryPricePerKm || 0)}"><small class="field-help">A distância de carro é calculada pelo Google Maps entre o endereço da empresa e o endereço do pedido. Configure GOOGLE_MAPS_API_KEY no servidor; nunca coloque a chave no navegador.</small></div>
+            <div class="field full"><h3>Horários disponíveis para entrega</h3><p>Escolha data, início, fim e quantos pedidos cabem no horário. Salve as configurações após adicionar ou remover.</p><div id="shop-delivery-slot-list" class="shop-owner-slot-list"></div></div>
+            <div class="shop-owner-slot-form full"><div class="field"><label>DATA</label><input id="shop-slot-date" type="date"></div><div class="field"><label>INÍCIO</label><input id="shop-slot-start" type="time"></div><div class="field"><label>FIM</label><input id="shop-slot-end" type="time"></div><div class="field"><label>VAGAS</label><input id="shop-slot-capacity" type="number" min="1" max="50" value="1"></div><button type="button" class="ghost-button" id="shop-slot-add">Adicionar horário</button></div>
+            <input type="hidden" id="shop-delivery-slots-json" name="deliverySlotsJson" value="${esc(JSON.stringify(settings.deliverySlots || []))}">
+            <div class="field full"><h3>Vinculação de histórico por CPF</h3><p>Confirme a identidade da pessoa fora do site antes de liberar ordens e compras anteriores.</p><div id="shop-owner-accounts" class="shop-owner-list" role="status">Carregando contas…</div></div>
+            <div class="field full"><h3>Solicitações de orçamento</h3><p>Fotos da frente e de trás são privadas e ficam disponíveis apenas para a equipe autorizada.</p><div id="shop-owner-quotes" class="shop-owner-list" role="status">Carregando solicitações…</div></div>
+          </div>` : '<div class="shop-approval-note"><strong>Acesso do proprietário</strong><p>Configuração de entregas e aprovação de histórico são exclusivas do proprietário.</p></div>'}
+        </section>
         <section id="avisos" class="card settings-section" ${settingsPanelAttributes('avisos')}><header class="card-header"><div><p class="eyebrow">ATENÇÃO</p><h2>Avisos e lembretes</h2></div></header><div class="settings-grid settings-toggles"><label class="settings-toggle"><span><strong>Estoque baixo</strong><small>Destacar produtos abaixo da quantidade mínima.</small></span><input name="lowStockAlert" type="checkbox" ${settings.lowStockAlert ? 'checked' : ''}></label><label class="settings-toggle"><span><strong>Prazos de entrega</strong><small>Avisar sobre ordens vencidas e próximas do prazo.</small></span><input name="dueDateAlert" type="checkbox" ${settings.dueDateAlert ? 'checked' : ''}></label><label class="settings-toggle"><span><strong>Compromissos da agenda</strong><small>Exibir compromissos e lembretes na central.</small></span><input name="appointmentAlert" type="checkbox" ${settings.appointmentAlert ? 'checked' : ''}></label></div></section>
-        <section id="dados" class="card settings-section" ${settingsPanelAttributes('dados')}><header class="card-header"><div><p class="eyebrow">SEGURANÇA</p><h2>Dados e privacidade</h2></div></header><div class="settings-grid"><div class="settings-notice"><span aria-hidden="true">☁</span><div><strong>Dados protegidos no Supabase</strong><p>Todos os cadastros ficam salvos no banco de dados na nuvem. Os documentos permanecem em um espaço privado com acesso autenticado e links temporários.</p></div></div><div class="cloud-session-actions"><button type="button" class="ghost-button" data-action="export-backup">↓ Exportar dados da nuvem</button><button type="button" class="ghost-button cloud-session-button" data-action="logout">↪ Encerrar sessão segura</button></div></div></section>
-        <div class="settings-actions company-savebar"><button class="primary-button" type="submit">✓ Salvar configurações</button></div>
+        <section id="dados" class="card settings-section" ${settingsPanelAttributes('dados')}><header class="card-header"><span class="settings-section-icon">${settingsIcon('shield')}</span><div><h2>Dados e privacidade</h2><p>Saiba como suas informações são usadas e mantenha uma cópia dos registros.</p></div></header><div class="settings-grid"><div class="settings-privacy-grid"><article><h3>Informações da empresa</h3><p>Cadastros e configurações ficam salvos na nuvem, disponíveis para a equipe conforme as permissões de cada usuário.</p></article><article><h3>Arquivos privados</h3><p>Documentos empresariais exigem acesso autorizado. A logo, o nome, o slogan e as cores da marca aparecem na apresentação pública.</p></article></div><div class="settings-export-row"><div><strong>Uma cópia dos seus registros</strong><p>Exporte os dados do sistema em JSON. Os arquivos anexados são baixados individualmente em Documentos.</p></div><button type="button" class="ghost-button" data-action="export-backup">Exportar dados</button></div></div></section>
+        <div class="settings-actions company-savebar"><p id="settings-save-status" role="status">Suas configurações estão atualizadas</p><div><button class="ghost-button" id="settings-discard" type="button" hidden>Descartar alterações</button><button class="primary-button" type="submit">Salvar configurações</button></div></div>
       </form>
     </div>`;
 
@@ -1457,12 +1514,15 @@ function renderSettings() {
   });
 
   const settingsForm = document.querySelector('#settings-form');
+  const brandingEditor = globalThis.CellfBranding?.bind(settingsForm, settings, apiRequest);
+  document.querySelector('#settings-discard')?.addEventListener('click', () => renderSettings());
   settingsForm?.addEventListener('invalid', event => {
     const panel = event.target?.closest?.('[role="tabpanel"]');
     if (panel && panel.hidden) activateSettingsTab(panel.id);
   }, true);
-  settingsForm?.addEventListener('submit', event => {
+  settingsForm?.addEventListener('submit', async event => {
     event.preventDefault();
+    if (settingsForm.dataset.saving === 'true' || brandingEditor?.busy) return;
     const form = new FormData(event.target);
     const documentValue = String(form.get('document') || '').trim();
     if (documentValue && !isValidCnpj(documentValue)) {
@@ -1475,7 +1535,7 @@ function renderSettings() {
       toast('Confira o CNPJ informado antes de salvar.', 'error');
       return;
     }
-    state.settings = {
+    const nextSettings = {
       ...state.settings,
       companyName: String(form.get('companyName') || '').trim(),
       slogan: String(form.get('slogan') || '').trim(),
@@ -1491,6 +1551,10 @@ function renderSettings() {
       openingTime: String(form.get('openingTime') || '09:00'),
       closingTime: String(form.get('closingTime') || '18:00'),
       warrantyDays: Number(form.get('warrantyDays') || 0),
+      ...(currentAccess.admin ? {
+        deliveryPricePerKm: Number(form.get('deliveryPricePerKm') || 0),
+        deliverySlots: JSON.parse(String(form.get('deliverySlotsJson') || '[]'))
+      } : {}),
       defaultDeadlineDays: Number(form.get('defaultDeadlineDays') || 0),
       dailyRevenueGoal: Number(form.get('dailyRevenueGoal') || 0),
       googleReviewUrl: String(form.get('googleReviewUrl') || '').trim(),
@@ -1499,10 +1563,102 @@ function renderSettings() {
       dueDateAlert: form.has('dueDateAlert'),
       appointmentAlert: form.has('appointmentAlert')
     };
-    recordActivity('settings', 'Configurações da empresa atualizadas');
-    saveState();
-    document.title = `${state.settings.companyName || 'Cellf'} — ${state.settings.slogan || 'Reparo e Comércio'}`;
-    toast('Configurações salvas com sucesso.');
+    const previousSettings = state.settings;
+    const previousActivity = state.activity.slice();
+    const status = document.querySelector('#settings-save-status');
+    const controls = [...settingsForm.querySelectorAll('input, textarea, select, button')].map(element => ({ element, disabled: element.disabled }));
+    settingsForm.dataset.saving = 'true';
+    controls.forEach(({ element }) => { element.disabled = true; });
+    if (status) status.textContent = 'Salvando configurações…';
+    let staged = false;
+    try {
+      await flushStateSave();
+      nextSettings.branding = brandingEditor ? await brandingEditor.upload() : branding;
+      state.settings = nextSettings;
+      recordActivity('settings', 'Configurações da empresa atualizadas');
+      staged = true;
+      if (!saveState()) throw new Error('Entre novamente para salvar as configurações.');
+      await flushStateSave();
+      document.title = [state.settings.companyName || 'Cellf', state.settings.slogan].filter(Boolean).join(' — ');
+      renderSettings();
+      toast('Configurações salvas com sucesso.');
+    } catch (error) {
+      if (staged) {
+        state.settings = previousSettings;
+        state.activity = previousActivity;
+        pendingStateRevision = persistedStateRevision;
+        syncShell();
+      }
+      if (status?.isConnected) status.textContent = error.message || 'Não foi possível salvar. Tente novamente.';
+      toast(error.message || 'Não foi possível salvar as configurações.', 'error');
+    } finally {
+      settingsForm.dataset.saving = 'false';
+      controls.forEach(({ element, disabled }) => { element.disabled = disabled; });
+    }
+  });
+  associateFormLabels(settingsForm);
+  if (currentAccess.admin) bindShopOwnerSettings();
+}
+
+function bindShopOwnerSettings() {
+  const field = document.querySelector('#shop-delivery-slots-json');
+  const list = document.querySelector('#shop-delivery-slot-list');
+  if (!field || !list) return;
+  let slots = Array.isArray(state.settings.deliverySlots) ? structuredClone(state.settings.deliverySlots) : [];
+  const draw = () => {
+    field.value = JSON.stringify(slots);
+    list.innerHTML = slots.length ? slots.slice().sort((a, b) => `${a.date}${a.start}`.localeCompare(`${b.date}${b.start}`)).map(slot => `<div class="shop-owner-row"><span><strong>${formatDate(slot.date)} · ${esc(slot.start)}–${esc(slot.end)}</strong><small>${Number(slot.capacity || 1)} ${Number(slot.capacity || 1) === 1 ? 'vaga' : 'vagas'}</small></span><button type="button" class="text-button" data-remove-slot="${esc(slot.id)}" aria-label="Remover horário de ${formatDate(slot.date)}">Remover</button></div>`).join('') : '<p class="field-help">Ainda não há horários. Entregas online só são oferecidas com um horário disponível.</p>';
+  };
+  draw();
+  document.querySelector('#shop-slot-add')?.addEventListener('click', () => {
+    const date = document.querySelector('#shop-slot-date')?.value || '';
+    const start = document.querySelector('#shop-slot-start')?.value || '';
+    const end = document.querySelector('#shop-slot-end')?.value || '';
+    const capacity = Number(document.querySelector('#shop-slot-capacity')?.value);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end) || start >= end || !Number.isSafeInteger(capacity) || capacity < 1 || capacity > 50) return toast('Confira a data, o intervalo e o número de vagas.', 'error');
+    if (new Date(`${date}T${end}:00-03:00`).getTime() <= Date.now()) return toast('Escolha um horário futuro.', 'error');
+    if (slots.some(slot => slot.date === date && slot.start === start && slot.end === end)) return toast('Este horário já foi adicionado.', 'error');
+    slots.push({ id: uid('slot'), date, start, end, capacity });
+    draw(); document.querySelector('#settings-form').dataset.dirty = 'true';
+  });
+  list.addEventListener('click', event => {
+    const button = event.target.closest('[data-remove-slot]');
+    if (!button) return;
+    slots = slots.filter(slot => slot.id !== button.dataset.removeSlot);
+    draw(); document.querySelector('#settings-form').dataset.dirty = 'true';
+  });
+  const accounts = document.querySelector('#shop-owner-accounts');
+  apiRequest('/api/shop?operation=owner-accounts').then(data => {
+    if (!accounts?.isConnected) return;
+    accounts.innerHTML = data.accounts?.length ? data.accounts.map(account => `<div class="shop-owner-row"><span><strong>${esc(account.name)}</strong><small>CPF ${esc(account.cpf.slice(0, 3))}.***.***-${esc(account.cpf.slice(-2))} · ${account.approved ? 'Histórico aprovado' : 'Aguardando confirmação'}</small></span><button type="button" class="ghost-button" data-shop-approve="${esc(account.id)}" data-cpf="${esc(account.cpf)}" data-approved="${account.approved ? 'false' : 'true'}">${account.approved ? 'Revogar' : 'Aprovar histórico'}</button></div>`).join('') : '<p class="field-help">Nenhuma conta de cliente criada ainda.</p>';
+  }).catch(error => { if (accounts?.isConnected) accounts.textContent = error.message; });
+  accounts?.addEventListener('click', async event => {
+    const button = event.target.closest('[data-shop-approve]');
+    if (!button) return;
+    const approved = button.dataset.approved === 'true';
+    if (approved && !confirm('Você confirmou a identidade desta pessoa fora do site? Aprovar libera compras e ordens antigas vinculadas a este CPF.')) return;
+    button.disabled = true;
+    try {
+      await apiRequest('/api/shop?operation=owner-approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: button.dataset.shopApprove, cpf: button.dataset.cpf, approved }) });
+      toast(approved ? 'Histórico aprovado para esta conta.' : 'Aprovação revogada.');
+      const fresh = await apiRequest('/api/shop?operation=owner-accounts');
+      const account = fresh.accounts.find(item => item.id === button.dataset.shopApprove);
+      if (account) { button.dataset.approved = account.approved ? 'false' : 'true'; button.textContent = account.approved ? 'Revogar' : 'Aprovar histórico'; button.parentElement.querySelector('small').textContent = `CPF ${account.cpf.slice(0, 3)}.***.***-${account.cpf.slice(-2)} · ${account.approved ? 'Histórico aprovado' : 'Aguardando confirmação'}`; }
+    } catch (error) { toast(error.message, 'error'); }
+    finally { button.disabled = false; }
+  });
+  const quotes = document.querySelector('#shop-owner-quotes');
+  apiRequest('/api/shop?operation=owner-quotes').then(data => {
+    if (!quotes?.isConnected) return;
+    quotes.innerHTML = data.quotes?.length ? data.quotes.map(quote => `<div class="shop-owner-quote"><div><strong>${esc(quote.model)} · ${esc(quote.name)}</strong><small>${formatDateTime(quote.createdAt)} · ${esc(quote.phone)}</small><p>${esc(quote.details)}</p></div><div class="shop-owner-quote-actions"><button type="button" class="ghost-button" data-shop-quote-photo="${esc(quote.id)}" data-side="front">Foto da frente</button><button type="button" class="ghost-button" data-shop-quote-photo="${esc(quote.id)}" data-side="back">Foto de trás</button></div></div>`).join('') : '<p class="field-help">Nenhuma solicitação de orçamento recebida.</p>';
+  }).catch(error => { if (quotes?.isConnected) quotes.textContent = error.message; });
+  quotes?.addEventListener('click', async event => {
+    const button = event.target.closest('[data-shop-quote-photo]');
+    if (!button) return;
+    try {
+      const result = await apiRequest(`/api/shop?operation=quote-photo&id=${encodeURIComponent(button.dataset.shopQuotePhoto)}&side=${encodeURIComponent(button.dataset.side)}`);
+      window.open(result.url, '_blank', 'noopener,noreferrer');
+    } catch (error) { toast(error.message, 'error'); }
   });
 }
 
@@ -1652,6 +1808,10 @@ function toggleMenu() {
 }
 
 function navigate(view) {
+  const settingsForm = document.querySelector('#settings-form');
+  if (settingsForm?.dataset.saving === 'true') return toast('Aguarde o salvamento das configurações.');
+  if (settingsForm?.dataset.dirty === 'true' && !window.confirm('Há alterações não salvas nas configurações. Deseja sair e descartá-las?')) return;
+  globalThis.CellfBranding?.dispose();
   const renderers = { dashboard: renderDashboard, orders: renderOrders, customers: renderCustomers, products: renderProducts, services: renderServices, sales: renderSales, payables: renderPayables, reports: renderReports, settings: renderSettings, agenda: renderAgenda, deliveries: renderDeliveries, ...(typeof cellfExtraViews === 'object' ? cellfExtraViews : {}) };
   if (!canAccess(view)) view = Object.keys(renderers).find(key => canAccess(key));
   if (!view) { content.innerHTML = emptyState('Acesso sem módulos liberados', 'Peça ao administrador para habilitar os módulos do seu usuário.'); return; }
@@ -1756,10 +1916,12 @@ function productModal(product = {}) {
     <div class="field"><label>PREÇO DE VENDA (R$) *</label><input name="price" type="number" min="0" step="0.01" required value="${product.price??''}"></div>
     <div class="field"><label>ESTOQUE ATUAL *</label><input name="stock" type="number" min="0" required value="${product.stock??0}"></div>
     <div class="field"><label>ESTOQUE MÍNIMO *</label><input name="minimum" type="number" min="0" required value="${product.minimum??0}"></div>
+    <div class="field full"><label>DESCRIÇÃO NA LOJA ONLINE</label><textarea name="description" maxlength="500" placeholder="Detalhes que ajudam o cliente a escolher">${esc(product.description || '')}</textarea></div>
+    <label class="checkbox-field full"><input name="online" type="checkbox" ${product.online ? 'checked' : ''}> Publicar este produto na loja online quando houver estoque</label>
     ${formActions(product.id?'Salvar alterações':'Cadastrar produto')}</form>`);
   document.querySelector('#product-form').addEventListener('submit', e=>{
-    e.preventDefault(); const data=Object.fromEntries(new FormData(e.target));
-    const record={ id:product.id||uid('p'), name:data.name.trim(), sku:data.sku.trim().toUpperCase(), category:data.category.trim(), cost:Number(data.cost||0), price:Number(data.price), stock:Number(data.stock), minimum:Number(data.minimum) };
+    e.preventDefault(); const form = new FormData(e.target); const data=Object.fromEntries(form);
+    const record={ id:product.id||uid('p'), name:data.name.trim(), sku:data.sku.trim().toUpperCase(), category:data.category.trim(), cost:Number(data.cost||0), price:Number(data.price), stock:Number(data.stock), minimum:Number(data.minimum), description:String(data.description || '').trim(), online:form.has('online') };
     if (state.products.some(item => item.id !== record.id && normalize(item.sku) === normalize(record.sku))) return toast('Já existe um produto cadastrado com este SKU.', 'error');
     if(product.id) state.products=state.products.map(x=>x.id===product.id?record:x); else state.products.unshift(record);
     recordActivity('product', `${product.id ? 'Atualizado' : 'Cadastrado'}: ${record.name}`);
@@ -2234,7 +2396,7 @@ function renderCloudAccess(mode = 'login', message = '') {
       </header>
     </div>
     <section class="cellf-public-hero" aria-labelledby="cellf-presentation-title">
-      <div class="cellf-hero-copy"><p class="cellf-public-eyebrow">CELLF · REPARO E COMÉRCIO</p><h1 id="cellf-presentation-title">Seu celular.<br>Seu dia.<br><span>Tudo conectado.</span></h1><p class="cellf-hero-description">Reparo, compras e cuidado com o que conecta você. Na loja ou com entrega, a CELLF acompanha a sua rotina.</p><a class="cellf-public-cta" href="#cellf-services">Conheça nossos serviços <span aria-hidden="true">↓</span></a></div>
+      <div class="cellf-hero-copy"><p class="cellf-public-eyebrow"><span data-brand-name>CELLF</span> · <span data-brand-slogan>REPARO E COMÉRCIO</span></p><h1 id="cellf-presentation-title">Seu celular.<br>Seu dia.<br><span>Tudo conectado.</span></h1><p class="cellf-hero-description" data-brand-description>Reparo, compras e cuidado com o que conecta você. Na loja ou com entrega, a CELLF acompanha a sua rotina.</p><a class="cellf-public-cta" href="#cellf-services">Conheça nossos serviços <span aria-hidden="true">↓</span></a></div>
       <div class="cellf-hero-art" aria-label="CELLF: tecnologia e cuidado"><span class="cellf-art-label">TECNOLOGIA COM CUIDADO</span><img src="/cellf-mark.png" alt="Símbolo F da CELLF com reflexo em ciano claro" width="1024" height="1024"><div class="cellf-art-caption"><span>Da nossa loja<br>até você.</span><span aria-hidden="true">↗</span></div></div>
     </section>
     <section class="cellf-public-services" id="cellf-services" aria-labelledby="cellf-services-title"><div class="cellf-services-heading"><p class="cellf-public-eyebrow">DO SEU JEITO</p><h2 id="cellf-services-title">Quatro formas de estar perto.</h2><p>Escolha como prefere comprar ou cuidar do seu aparelho.</p></div><div class="cellf-service-grid">
@@ -2243,14 +2405,14 @@ function renderCloudAccess(mode = 'login', message = '') {
       <article><span class="cellf-service-number">03 /</span><h3>Venda balcão</h3><p>Visite a loja, conheça os produtos e faça sua compra com atendimento presencial.</p><span class="cellf-service-tag">Escolha de perto</span></article>
       <article><span class="cellf-service-number">04 /</span><h3>Serviço em loja</h3><p>Traga seu aparelho para avaliação e acompanhe as orientações para o reparo.</p><span class="cellf-service-tag">Cuidado com seu aparelho</span></article>
     </div></section>
-    <footer class="cellf-public-footer"><strong>CELLF <span>Reparo e Comércio</span></strong><p>Tecnologia que faz parte do seu dia.</p><a href="/vitrine">Aparelhos disponíveis ↗</a><a href="#">Voltar ao topo ↑</a></footer>
+    <footer class="cellf-public-footer"><strong><span data-brand-name>CELLF</span> <span data-brand-slogan>Reparo e Comércio</span></strong><p>Tecnologia que faz parte do seu dia.</p><a href="/vitrine">Aparelhos disponíveis ↗</a><a href="#">Voltar ao topo ↑</a></footer>
     <dialog class="cellf-login-dialog" id="cellf-login-dialog" aria-labelledby="cloud-access-title"><button class="cellf-login-close" id="close-cellf-login" type="button" aria-label="Fechar login">×</button><section class="cloud-access-screen" aria-labelledby="cloud-access-title">
     <div class="cloud-access-card">
       <div class="cloud-brand"><img src="/cellf-logo-brand.svg" alt="Cellf — Reparo e Comércio" width="1135" height="343"></div>
       <div class="cloud-access-body">
         <div class="cloud-access-heading"><span class="cloud-access-kicker">ACESSO SEGURO</span><h1 id="cloud-access-title">${esc(title)}</h1>${description ? `<p>${esc(description)}</p>` : ''}</div>
         ${login ? `<form id="cloud-login-form" class="cloud-login-form" method="post" autocomplete="on">
-          <div class="cloud-account"><span class="cloud-account-avatar" aria-hidden="true">C</span><span><strong>Administrador Cellf</strong><small>Ambiente empresarial protegido</small></span><span class="cloud-account-check" aria-hidden="true">✓</span></div>
+          <div class="cloud-account"><span class="cloud-account-avatar" aria-hidden="true">C</span><span><strong>Administrador <span data-brand-name>Cellf</span></strong><small>Ambiente empresarial protegido</small></span><span class="cloud-account-check" aria-hidden="true">✓</span></div>
           <div class="field"><label for="cloud-email">E-MAIL</label><input id="cloud-email" name="email" type="email" autocomplete="username" inputmode="email" placeholder="nome@empresa.com.br" aria-describedby="cloud-login-status" required></div>
           <div class="field cloud-password-field"><label for="cloud-password">SENHA DE ACESSO</label><div class="cloud-password-control"><input id="cloud-password" name="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" aria-describedby="cloud-login-status" required><button type="button" class="cloud-password-toggle" data-action="toggle-cloud-password" aria-label="Mostrar senha" aria-pressed="false">◉</button></div></div>
           <section class="cloud-privacy" aria-label="Privacidade e cookies">
@@ -2269,12 +2431,14 @@ function renderCloudAccess(mode = 'login', message = '') {
         <div class="cloud-access-security"><span><span aria-hidden="true">◈</span> Sessão protegida</span></div>
       </div>
     </div>
-    <p class="cloud-access-footer">Cellf · Gestão de assistência técnica</p>
+    <p class="cloud-access-footer"><span data-brand-name>Cellf</span> · Gestão de assistência técnica</p>
   </section></dialog></div>`;
 
   const loginDialog = document.querySelector('#cellf-login-dialog');
   const loginTrigger = document.querySelector('#open-cellf-login');
   if (keepLoginOpen) loginDialog?.showModal();
+  globalThis.CellfBranding?.apply();
+  globalThis.CellfShop?.mount();
   loginTrigger?.addEventListener('click', () => {
     loginDialog.showModal();
     document.querySelector('#cloud-email')?.focus();
@@ -2678,11 +2842,12 @@ document.addEventListener('visibilitychange', () => {
 });
 
 window.addEventListener?.('beforeunload', event => {
-  if (!cloudConnection.authenticated || pendingStateRevision <= persistedStateRevision) return;
+  if (document.querySelector('#settings-form')?.dataset.dirty !== 'true' && (!cloudConnection.authenticated || pendingStateRevision <= persistedStateRevision)) return;
   event.preventDefault();
   event.returnValue = '';
 });
 
+globalThis.CellfBranding?.loadPublic();
 import('./operations.js').then(({ installOperations }) => {
   cellfExtensions = installOperations({
     get state() { return state; }, get access() { return currentAccess; },

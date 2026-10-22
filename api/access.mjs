@@ -58,7 +58,7 @@ export function stateForAccess(state, access) {
   visible.issuedDocuments=(state.issuedDocuments || []).filter(d=>(access.modules.includes('orders') && state.orders?.some(o=>o.id===d.sourceId)) || (access.modules.includes('sales') && state.sales?.some(s=>s.id===d.sourceId)));
   visible.operationalDataVersion = state.operationalDataVersion;
   const settings = state.settings || {};
-  visible.settings = Object.fromEntries(['companyName','slogan','legalName','document','phone','email','address','city','postalCode','openingTime','closingTime','warrantyDays','defaultDeadlineDays','orderNotes','googleReviewUrl'].map(k=>[k,settings[k]]));
+  visible.settings = Object.fromEntries(['companyName','slogan','branding','legalName','document','phone','email','address','city','postalCode','openingTime','closingTime','warrantyDays','defaultDeadlineDays','orderNotes','googleReviewUrl'].map(k=>[k,settings[k]]));
   visible.settings.managerName = access.name;
   visible.settings.managerRole = 'Colaborador';
   return access.financial ? visible : redact(visible);

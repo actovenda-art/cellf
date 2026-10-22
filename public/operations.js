@@ -188,7 +188,8 @@ export function installOperations(app) {
   }
   async function renderShowcase() {
     app.setPublic();
-    app.content.innerHTML=`<div class="showcase-page"><header class="showcase-header"><a href="/"><img src="/cellf-logo-brand.svg" width="170" height="52" alt="CELLF"></a><a href="/">Página inicial</a></header><h1>Aparelhos disponíveis</h1><p>Conheça os aparelhos da CELLF e fale com nossa equipe.</p><div id="showcase-list" class="operation-grid" role="status">Carregando aparelhos…</div></div>`;
+    app.content.innerHTML=`<div class="showcase-page"><header class="showcase-header"><a href="/"><img data-brand-logo src="/cellf-logo-brand.svg" width="170" height="52" alt="CELLF"></a><a href="/">Página inicial</a></header><h1>Aparelhos disponíveis</h1><p>Conheça os aparelhos da <span data-brand-name>CELLF</span> e fale com nossa equipe.</p><div id="showcase-list" class="operation-grid" role="status">Carregando aparelhos…</div></div>`;
+    globalThis.CellfBranding?.apply();
     try {
       const data=await apiRequest('/api/showcase');
       const phone=String(data.company.phone || '').replace(/\D/g,'');

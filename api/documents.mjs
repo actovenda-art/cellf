@@ -34,7 +34,7 @@ function validatedId(value) {
 
 function validatedScope(value) {
   const scope = typeof value === 'string' && value.trim() ? value.trim() : 'company';
-  if (!['company', 'orders', 'devices'].includes(scope)) {
+  if (!['company', 'orders', 'devices', 'branding'].includes(scope)) {
     throw new ApiError(400, 'INVALID_DOCUMENT_SCOPE', 'A categoria do arquivo é inválida.');
   }
   return scope;
@@ -98,6 +98,9 @@ function validateUpload(value) {
   }
 
   const scope = validatedScope(value.scope);
+  if (scope === 'branding' && (!['image/png', 'image/jpeg', 'image/webp'].includes(contentType) || size > 2 * 1024 * 1024)) {
+    throw new ApiError(400, 'INVALID_BRAND_IMAGE', 'Envie uma logo em PNG, JPG ou WebP de até 2 MB.');
+  }
   return { id, scope, fileName, contentType, size, path: documentPath(scope, id) };
 }
 
@@ -121,6 +124,7 @@ export default async function handler(request, response) {
       }
       const document = validateUpload(await readJsonBody(request, { maxBytes: 8 * 1024 }));
       const scope = document.path.split('/')[0];
+      if (scope === 'branding' && !access.admin) throw new ApiError(403, 'ADMIN_REQUIRED', 'Somente o administrador pode alterar a marca.');
       if (!access.admin) requireModule(access, scope === 'company' ? 'settings' : scope);
       const result = await supabaseRequest(
         '/storage/v1/object/upload/sign/' + encodedObjectPath(config, document.path),
@@ -136,6 +140,7 @@ export default async function handler(request, response) {
 
     const id = validatedId(queryValue(request, 'id'));
     const scope = validatedScope(queryValue(request, 'scope'));
+    if (scope === 'branding' && !access.admin) throw new ApiError(403, 'ADMIN_REQUIRED', 'Somente o administrador pode alterar a marca.');
     if (!access.admin) requireModule(access, scope === 'company' ? 'settings' : scope);
     const path = documentPath(scope, id);
 

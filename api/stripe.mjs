@@ -140,6 +140,7 @@ export async function updateStripeSale(session, nextStatus = 'paid') {
       if (sale.attendanceType === 'delivery' && sale.deliveryAddress) {
         state.deliveries ||= [];
         if (!state.deliveries.some(delivery => delivery.sourceType === 'sale' && delivery.sourceId === sale.id)) {
+          const chosenSlot = (state.settings?.deliverySlots || []).find(slot => slot.id === sale.deliverySlotId);
           state.deliveries.unshift({
             id: `delivery-${randomUUID()}`,
             sourceType: 'sale',
@@ -149,7 +150,10 @@ export async function updateStripeSale(session, nextStatus = 'paid') {
             customer: sale.customer || 'Cliente sem identificação',
             phone: sale.customerPhone || '',
             address: { ...sale.deliveryAddress },
-            scheduledDate: new Date().toISOString().slice(0, 10),
+            scheduledDate: chosenSlot?.date || new Date().toISOString().slice(0, 10),
+            time: chosenSlot?.start || '',
+            deliveryFee: Number(sale.deliveryFee || 0),
+            deliveryKm: Number(sale.deliveryKm || 0),
             status: 'scheduled',
             createdAt: new Date().toISOString()
           });

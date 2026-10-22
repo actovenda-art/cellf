@@ -301,6 +301,12 @@ test('no celular, a barra lateral sai da tela e pode retornar quando aberta', ()
   assertProperty('.sidebar-close', 'display', /grid|flex|block/iu, mobile);
 });
 
+test('no desktop, os controles exclusivos do menu móvel permanecem ocultos', () => {
+  assertProperty('.menu-button', 'display', /^none$/iu);
+  assertProperty('.sidebar-close', 'display', /^none$/iu);
+  assert.doesNotMatch(rulesFor('.icon-button').at(-1)?.body ?? '', /\bdisplay\s*:/iu);
+});
+
 test('o menu móvel utiliza camada de fundo que respeita o atributo hidden', () => {
   const mobile = widthScope(780);
 

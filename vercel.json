@@ -1,6 +1,8 @@
 {
   "version": 2,
   "builds": [
+    { "src": "api/branding.mjs", "use": "@vercel/node" },
+    { "src": "api/shop.mjs", "use": "@vercel/node" },
     { "src": "api/team.mjs", "use": "@vercel/node" },
     { "src": "api/showcase.mjs", "use": "@vercel/node" },
     { "src": "api/health.mjs", "use": "@vercel/node" },
@@ -13,6 +15,10 @@
     { "src": "public/**", "use": "@vercel/static" }
   ],
   "routes": [
+    { "src": "/api/branding", "dest": "/api/branding.mjs" },
+    { "src": "/api/shop", "dest": "/api/shop.mjs" },
+    { "src": "/shop.js", "dest": "/public/shop.js" },
+    { "src": "/branding.js", "dest": "/public/branding.js" },
     { "src": "/api/team", "dest": "/api/team.mjs" },
     { "src": "/api/showcase", "dest": "/api/showcase.mjs" },
     { "src": "/operations.js", "dest": "/public/operations.js" },
