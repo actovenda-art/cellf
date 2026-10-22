@@ -64,7 +64,7 @@
     document.querySelector('.cellf-public-brand')?.setAttribute('aria-label', `${name} — início`);
     const art = document.querySelector('.cellf-hero-art img');
     if (art) setImage(art, brand.logo ? logoUrl(published) : '/cellf-mark.png', `Marca ${name}`);
-    document.title = slogan ? `${name} — ${slogan}` : name;
+    document.title = globalThis.location?.pathname === '/loja' ? `${name} — Loja online` : slogan ? `${name} — ${slogan}` : name;
   }
   async function loadPublic() {
     try {

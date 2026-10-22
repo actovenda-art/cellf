@@ -37,12 +37,19 @@ try {
       }
       return route.fulfill({ json: {} });
     });
-    await page.goto('http://localhost:4173');
-    await page.locator('#shop-products .shop-product-card').waitFor();
-    const bounds = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth, sections: [...document.querySelectorAll('#vitrine-online, #solicitar-orcamento')].map(section => ({ id: section.id, width: section.getBoundingClientRect().width })) }));
-    assert.ok(bounds.scroll <= bounds.width + 1, `horizontal overflow at ${width}: ${JSON.stringify(bounds)}`);
+    await page.goto('http://localhost:4173/');
+    await page.locator('.cellf-public-hero').waitFor();
+    assert.equal(await page.locator('#vitrine-online').count(), 0);
+    assert.ok(await page.locator('a[href="/loja"]:visible').first().isVisible());
+    const homeBounds = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
+    assert.ok(homeBounds.scroll <= homeBounds.width + 1, `home overflows at ${width}: ${JSON.stringify(homeBounds)}`);
+    if ([390, 1440].includes(width)) await page.screenshot({ path: join(out, `home-${width}.png`), fullPage: true });
+    await page.locator('button[data-open-shop-quote]:visible').first().click();
+    await page.locator('#shop-quote-dialog').waitFor({ state: 'visible' });
+    const quoteBounds = await page.locator('#shop-quote-dialog').evaluate(dialog => ({ left: dialog.getBoundingClientRect().left, right: dialog.getBoundingClientRect().right, width: document.documentElement.clientWidth }));
+    assert.ok(quoteBounds.left >= -1 && quoteBounds.right <= quoteBounds.width + 1, `quote modal clipped at ${width}: ${JSON.stringify(quoteBounds)}`);
+    if (width === 390) await page.screenshot({ path: join(out, 'quote-390.png') });
     assert.ok(await page.locator('#shop-account-button').isVisible());
-    assert.ok(await page.locator('#shop-cart-button').isVisible());
     if (width === 390) {
       const photo = readFileSync(new URL('../public/icon-192.png', import.meta.url));
       await page.locator('#shop-quote-form [name=name]').fill('Visitante Teste');
@@ -55,6 +62,16 @@ try {
       await page.locator('#shop-quote-message').filter({ hasText: 'recebida' }).waitFor();
       assert.equal(await page.locator('#shop-auth-dialog').isVisible(), false);
     }
+    await page.locator('#shop-quote-dialog [data-shop-close]').click();
+    await page.goto('http://localhost:4173/loja');
+    await page.locator('#shop-products .shop-product-card').waitFor();
+    assert.equal(await page.locator('.cellf-public-hero').count(), 0);
+    assert.ok(await page.locator('#shop-cart-button').isVisible());
+    await page.locator('button[data-open-shop-quote]:visible').first().click();
+    await page.locator('#shop-quote-dialog').waitFor({ state: 'visible' });
+    await page.locator('#shop-quote-dialog [data-shop-close]').click();
+    const bounds = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth, sections: [...document.querySelectorAll('#vitrine-online')].map(section => ({ id: section.id, width: section.getBoundingClientRect().width })) }));
+    assert.ok(bounds.scroll <= bounds.width + 1, `horizontal overflow at ${width}: ${JSON.stringify(bounds)}`);
     await page.locator('[data-shop-add="p1"]').click();
     await page.locator('#shop-cart-button').click();
     assert.match(await page.locator('#shop-cart-total').textContent(), /39,00/);

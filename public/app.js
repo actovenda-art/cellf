@@ -2362,6 +2362,7 @@ function setShellAccess(enabled) {
 }
 
 function renderCloudAccess(mode = 'login', message = '') {
+  const storePage = globalThis.location?.pathname === '/loja';
   const keepLoginOpen = Boolean(document.querySelector('#cellf-login-dialog')?.open);
   const login = mode === 'login';
   const loading = mode === 'loading';
@@ -2377,6 +2378,7 @@ function renderCloudAccess(mode = 'login', message = '') {
   const feedback = message && !(login && /UNAUTHENTICATED|sessão|autentic/i.test(message)) ? String(message) : '';
 
   setShellAccess(false);
+  if (storePage) document.title = 'Cellf — Loja online';
   content.innerHTML = `<div class="cellf-public-page">
     <div class="cellf-public-header-stack">
       <header class="cellf-public-header">
@@ -2391,10 +2393,12 @@ function renderCloudAccess(mode = 'login', message = '') {
             </defs>
           </svg>
         </div>
-        <a class="cellf-public-brand" href="#" aria-label="CELLF — início"><img src="/cellf-logo-brand.svg" alt="CELLF" width="1135" height="343"></a>
-        <nav aria-label="Navegação da apresentação"><a href="#cellf-services">Nossos serviços</a><button class="cellf-login-trigger" id="open-cellf-login" type="button" aria-haspopup="dialog" aria-controls="cellf-login-dialog">Login <span aria-hidden="true">↗</span></button></nav>
+        <a class="cellf-public-brand" href="/" aria-label="CELLF — início"><img src="/cellf-logo-brand.svg" alt="CELLF" width="1135" height="343"></a>
+        <nav aria-label="Navegação pública"><a href="/" ${storePage ? '' : 'aria-current="page"'}>Início</a><a href="/loja" ${storePage ? 'aria-current="page"' : ''}>Loja</a><button class="cellf-public-nav-action" type="button" data-open-shop-quote>Solicitar orçamento</button><button type="button" id="shop-account-button" class="shop-account-button">Minha conta ↗</button><button class="cellf-login-trigger" id="open-cellf-login" type="button" aria-haspopup="dialog" aria-controls="cellf-login-dialog">Login <span aria-hidden="true">↗</span></button></nav>
       </header>
     </div>
+    <nav class="cellf-public-mobile-nav" aria-label="Navegação pública no celular"><a href="/" ${storePage ? '' : 'aria-current="page"'}>Início</a><a href="/loja" ${storePage ? 'aria-current="page"' : ''}>Loja</a><button type="button" data-open-shop-quote>Orçamento</button></nav>
+    ${storePage ? '' : `
     <section class="cellf-public-hero" aria-labelledby="cellf-presentation-title">
       <div class="cellf-hero-copy"><p class="cellf-public-eyebrow"><span data-brand-name>CELLF</span> · <span data-brand-slogan>REPARO E COMÉRCIO</span></p><h1 id="cellf-presentation-title">Seu celular.<br>Seu dia.<br><span>Tudo conectado.</span></h1><p class="cellf-hero-description" data-brand-description>Reparo, compras e cuidado com o que conecta você. Na loja ou com entrega, a CELLF acompanha a sua rotina.</p><a class="cellf-public-cta" href="#cellf-services">Conheça nossos serviços <span aria-hidden="true">↓</span></a></div>
       <div class="cellf-hero-art" aria-label="CELLF: tecnologia e cuidado"><span class="cellf-art-label">TECNOLOGIA COM CUIDADO</span><img src="/cellf-mark.png" alt="Símbolo F da CELLF com reflexo em ciano claro" width="1024" height="1024"><div class="cellf-art-caption"><span>Da nossa loja<br>até você.</span><span aria-hidden="true">↗</span></div></div>
@@ -2405,7 +2409,8 @@ function renderCloudAccess(mode = 'login', message = '') {
       <article><span class="cellf-service-number">03 /</span><h3>Venda balcão</h3><p>Visite a loja, conheça os produtos e faça sua compra com atendimento presencial.</p><span class="cellf-service-tag">Escolha de perto</span></article>
       <article><span class="cellf-service-number">04 /</span><h3>Serviço em loja</h3><p>Traga seu aparelho para avaliação e acompanhe as orientações para o reparo.</p><span class="cellf-service-tag">Cuidado com seu aparelho</span></article>
     </div></section>
-    <footer class="cellf-public-footer"><strong><span data-brand-name>CELLF</span> <span data-brand-slogan>Reparo e Comércio</span></strong><p>Tecnologia que faz parte do seu dia.</p><a href="/vitrine">Aparelhos disponíveis ↗</a><a href="#">Voltar ao topo ↑</a></footer>
+    <section class="cellf-public-next" aria-label="Continue com a CELLF"><div><p class="cellf-public-eyebrow">ESCOLHA SEU PRÓXIMO PASSO</p><h2>Compre ou cuide do seu aparelho.</h2></div><div class="cellf-public-next-actions"><a href="/loja">Visitar loja <span aria-hidden="true">↗</span></a><button type="button" data-open-shop-quote>Solicitar orçamento <span aria-hidden="true">↗</span></button></div></section>`}
+    <footer class="cellf-public-footer"><strong><span data-brand-name>CELLF</span> <span data-brand-slogan>Reparo e Comércio</span></strong><p>Tecnologia que faz parte do seu dia.</p><a href="/loja">Loja online ↗</a><a href="/vitrine">Aparelhos disponíveis ↗</a><a href="#app-content">Voltar ao topo ↑</a></footer>
     <dialog class="cellf-login-dialog" id="cellf-login-dialog" aria-labelledby="cloud-access-title"><button class="cellf-login-close" id="close-cellf-login" type="button" aria-label="Fechar login">×</button><section class="cloud-access-screen" aria-labelledby="cloud-access-title">
     <div class="cloud-access-card">
       <div class="cloud-brand"><img src="/cellf-logo-brand.svg" alt="Cellf — Reparo e Comércio" width="1135" height="343"></div>
@@ -2512,6 +2517,7 @@ function renderCloudAccess(mode = 'login', message = '') {
     try {
       await authenticate(email, password);
       if (input) input.value = '';
+      if (storePage) { window.location.assign('/'); return; }
       await bootstrapApplication();
     } catch (error) {
       if (error?.status === 503) {
@@ -2862,6 +2868,7 @@ import('./operations.js').then(({ installOperations }) => {
   });
   cellfExtraViews = cellfExtensions.views;
   if (location.pathname === '/vitrine') return cellfExtensions.renderShowcase();
+  if (location.pathname === '/loja') return renderCloudAccess('login');
   return bootstrapApplication();
 }).catch(error => {
   console.error('Falha ao iniciar os módulos CELLF', error);

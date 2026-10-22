@@ -127,6 +127,8 @@ test('checkout recalcula preço, confirma Stripe, baixa estoque, agenda entrega 
   await handler(request('checkout', { method: 'POST', cookie, body: { items: [{ productId: 'product-1', quantity: 1, unitPrice: 0.01 }], fulfillment: 'delivery', deliverySlotId: 'slot-1', address: { postalCode: '01001000', street: 'Praça da Sé', number: '1', city: 'São Paulo', state: 'SP' } } }), res);
   assert.equal(res.statusCode, 201);
   assert.equal(stripeCalls[0].line_items[0].price_data.unit_amount, 5150);
+  assert.match(stripeCalls[0].success_url, /^https:\/\/cellf\.com\.br\/loja\?shop=success/);
+  assert.match(stripeCalls[0].cancel_url, /^https:\/\/cellf\.com\.br\/loja\?shop=cancel/);
   const sale = rows.get('cellf-primary').state.sales[0];
   assert.equal(sale.total, 51.5);
   assert.equal(sale.customerDocument, CPF);

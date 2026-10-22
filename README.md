@@ -9,6 +9,7 @@ Sistema de gestão para assistência técnica e comércio de celulares, com iden
 - **Clientes:** cadastro, dados de contato e histórico de atendimento.
 - **Agenda:** organização dos compromissos e da rotina da assistência.
 - **Produtos e estoque:** preços, custos, SKU, estoque mínimo e movimentações.
+- **Páginas públicas:** apresentação em `/` e loja online em `/loja`. Solicitar orçamento abre um modal em ambas, antes ou depois do login, sem criar uma página separada.
 - **Loja online:** publicação individual de produtos, carrinho, conta por CPF e PIN de quatro dígitos, retirada ou entrega, Checkout Stripe, histórico de compras e ordens, garantias, gráfico de utilização e avaliações. Comentários de avaliações ficam privados; a vitrine publica apenas quantidades de avaliações positivas e negativas.
 - **Solicitar orçamento:** formulário público ou autenticado com modelo, histórico e fotos privadas da frente e de trás do aparelho.
 - **Serviços:** catálogo de reparos com preço, custo, duração, garantia e descrição técnica padrão.

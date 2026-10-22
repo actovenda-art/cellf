@@ -340,8 +340,8 @@ async function handlePost(request, response, operation, createClient) {
       const session = await client.checkout.sessions.create({
         mode: 'payment', client_reference_id: sale.id, metadata: { cellf_sale_id: sale.id },
         line_items: [{ quantity: 1, price_data: { currency: 'brl', unit_amount: Math.round(sale.total * 100), product_data: { name: `Compra CELLF · ${sale.id.slice(0, 12)}`, description: sale.items.map(item => `${item.quantity}× ${item.name}`).join(', ').slice(0, 500) } } }],
-        success_url: `${origin}/?shop=success&session_id={CHECKOUT_SESSION_ID}#minha-conta`,
-        cancel_url: `${origin}/?shop=cancel#vitrine-online`, locale: 'pt-BR', expires_at: Math.floor(Date.now() / 1000) + 35 * 60
+        success_url: `${origin}/loja?shop=success&session_id={CHECKOUT_SESSION_ID}#minha-conta`,
+        cancel_url: `${origin}/loja?shop=cancel#vitrine-online`, locale: 'pt-BR', expires_at: Math.floor(Date.now() / 1000) + 35 * 60
       }, { idempotencyKey: `cellf-shop-${sale.id}` });
       await mutateMain(state => { const current = state.sales?.find(entry => entry.id === sale.id); if (current) current.stripeSessionId = session.id; });
       return sendJson(response, 201, { saleId: sale.id, url: session.url });
